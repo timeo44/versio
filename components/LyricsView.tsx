@@ -12,6 +12,7 @@ interface Props {
   synced: boolean;
   activeIndex: number;
   translations: Record<string, string>;
+  pronunciations?: Record<string, string>;
   translating: boolean;
   showTranslation: boolean;
   mode: DisplayMode;
@@ -96,6 +97,7 @@ export function LyricsView(p: Props) {
               synced={p.synced}
               browsing={!follow}
               translation={p.showTranslation ? p.translations[line.text.trim()] : undefined}
+              pronunciation={p.pronunciations?.[line.text.trim()]}
               pending={p.showTranslation && p.translating && !!line.text.trim() && !(line.text.trim() in p.translations)}
               mode={p.showTranslation ? p.mode : "original"}
               rtlOriginal={rtlOriginal}
@@ -127,6 +129,7 @@ interface LineProps {
   synced: boolean;
   browsing: boolean;
   translation?: string;
+  pronunciation?: string;
   pending: boolean;
   mode: DisplayMode;
   rtlOriginal: boolean;
@@ -135,7 +138,7 @@ interface LineProps {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const Line = memo(function Line({ line, distance, synced, browsing, translation, pending, mode, rtlOriginal, rtlTranslation, onSelect, ref }: LineProps) {
+const Line = memo(function Line({ line, distance, synced, browsing, translation, pronunciation, pending, mode, rtlOriginal, rtlTranslation, onSelect, ref }: LineProps) {
   const active = synced && distance === 0;
   const near = synced && Math.abs(distance) === 1;
   const isGap = !line.text.trim();
@@ -178,11 +181,17 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
       {showOriginal && (
         <p
           dir={rtlOriginal ? "rtl" : "auto"}
-          className={`text-balance font-bold leading-[1.15] tracking-[-0.02em] text-white transition-colors ${
+          className={`text-balance text-left font-bold leading-[1.15] tracking-[-0.02em] text-white transition-colors ${
             translationIsMain ? "" : "text-[26px] md:text-[38px] xl:text-[44px]"
           } ${mode === "translation" ? "text-[26px] text-white/50 md:text-[38px]" : ""}`}
         >
           {line.text}
+        </p>
+      )}
+
+      {showOriginal && pronunciation && (
+        <p dir="ltr" className="mt-1 text-[15px] font-normal leading-snug tracking-[0.01em] text-white/55 md:text-[18px]">
+          {pronunciation}
         </p>
       )}
 
@@ -194,7 +203,7 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
               className={
                 translationIsMain
                   ? "text-balance text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-white md:text-[38px] xl:text-[44px]"
-                  : "text-balance font-serif text-[21px] italic leading-snug text-[color:var(--accent-text)] md:text-[27px] xl:text-[30px]"
+                  : "text-balance text-[19px] font-medium leading-snug tracking-[-0.01em] text-[color:var(--accent-text)] md:text-[24px] xl:text-[27px]"
               }
             >
               {translation}

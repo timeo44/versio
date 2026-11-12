@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { rest, spotifyUserFromRequest, supabaseEnabled } from "@/lib/server/supabase";
+import { rest, supabaseEnabled } from "@/lib/server/supabase";
+import { authenticate } from "@/lib/server/access";
 import type { VocabEntry } from "@/lib/vocabulary/types";
 
 export const dynamic = "force-dynamic";
@@ -30,9 +31,12 @@ const toEntry = (r: Row): VocabEntry => ({
 
 async function guard(req: Request) {
   if (!supabaseEnabled()) return { error: NextResponse.json({ error: "Vocabulary sync is not configured." }, { status: 501 }) };
-  const user = await spotifyUserFromRequest(req);
-  if (!user) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  return { user };
+  try {
+    const u = await authenticate(req);
+    return { user: u.profile.id };
+  } catch {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
 }
 
 export async function GET(req: Request) {

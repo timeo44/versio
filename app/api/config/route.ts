@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { activeProvider, explanationsAvailable } from "@/lib/server/translate";
+import { activeProvider, explanationsAvailable, romanizationAvailable } from "@/lib/server/translate";
 import { supabaseEnabled } from "@/lib/server/supabase";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,7 @@ export function GET() {
   return NextResponse.json({
     provider: activeProvider(),
     explanations: explanationsAvailable(),
+    pronunciation: romanizationAvailable(),
     vocabularySync: supabaseEnabled(),
   });
 }

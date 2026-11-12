@@ -11,7 +11,12 @@ import { useSettings } from "@/hooks/useSettings";
 import { useConfig } from "@/hooks/useConfig";
 import { useDominantColor } from "@/hooks/useDominantColor";
 import { useVocabulary } from "@/hooks/useVocabulary";
+import { usePronunciation } from "@/hooks/usePronunciation";
 import { ConnectScreen } from "./ConnectScreen";
+import { AccessScreen } from "./AccessScreen";
+import { AdminPanel } from "./AdminPanel";
+import { captureInviteFromUrl, useAccess } from "@/hooks/useAccess";
+import type { AccessInfo } from "@/lib/access/types";
 import { TopBar } from "./TopBar";
 import { NowPlaying } from "./NowPlaying";
 import { LyricsView } from "./LyricsView";
@@ -27,6 +32,7 @@ export function App() {
   const [notice, setNotice] = useState<string | undefined>();
 
   useEffect(() => {
+    captureInviteFromUrl();
     const sync = () => setConnected(hasSession());
     sync();
     setHydrated(true);
@@ -63,16 +69,39 @@ export function App() {
       </div>
     );
   if (!connected) return <ConnectScreen notice={notice} />;
-  return <Player onExpired={expire} />;
+  return <Gate onExpired={expire} />;
 }
 
-function Player({ onExpired }: { onExpired: (msg: string) => void }) {
+/** Checks with the server whether this Spotify account may use the app. */
+function Gate({ onExpired }: { onExpired: (msg: string) => void }) {
+  const { state, reload } = useAccess();
+
+  useEffect(() => {
+    if (state.status === "error" && state.code === "unauthenticated") onExpired("Your Spotify session expired. Please reconnect.");
+  }, [state, onExpired]);
+
+  if (state.status === "loading")
+    return (
+      <div className="grid min-h-dvh place-items-center">
+        <div className="animate-pulse">
+          <Logo size={40} />
+        </div>
+      </div>
+    );
+  if (state.status === "error")
+    return <AccessScreen kind={state.code === "spotify_not_registered" ? "not_registered" : "error"} detail={state.message} onRetry={reload} />;
+  const { info, inviteError } = state;
+  if (info.status !== "active") return <AccessScreen kind={info.status} name={info.displayName} inviteError={inviteError} onRetry={reload} />;
+  return <Player onExpired={onExpired} access={info} reloadAccess={reload} />;
+}
+
+function Player({ onExpired, access, reloadAccess }: { onExpired: (msg: string) => void; access: AccessInfo; reloadAccess: () => void }) {
   const config = useConfig();
   const { settings, update } = useSettings();
   const playback = usePlayback(true);
   const track = playback.track;
 
-  const [panel, setPanel] = useState<null | "settings" | "vocab">(null);
+  const [panel, setPanel] = useState<null | "settings" | "vocab" | "admin">(null);
   const [explain, setExplain] = useState<ExplainTarget | null>(null);
   const [lyricsNonce, setLyricsNonce] = useState(0);
 
@@ -106,12 +135,20 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
     activeIndex,
   });
 
+  const pron = usePronunciation({
+    enabled: settings.showPronunciation && !!config?.pronunciation && !!lines,
+    trackKey: track?.key ?? null,
+    lines,
+    title: track?.name,
+    artist: track?.artists.join(", "),
+  });
+
   const vocab = useVocabulary(!!config?.vocabularySync);
 
   const rgb = useDominantColor(track?.artUrlSmall ?? track?.artUrl ?? null);
   const theme = useMemo(() => {
     const [r, g, b] = rgb;
-    const mix = (c: number) => Math.round(c + (255 - c) * 0.62);
+    const mix = (c: number) => Math.round(c + (255 - c) * 0.68);
     return {
       "--accent": `rgb(${r} ${g} ${b})`,
       "--accent-text": `rgb(${mix(r)} ${mix(g)} ${mix(b)})`,
@@ -130,6 +167,7 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
       };
       setExplain({
         line: line.text,
+        pronunciation: pron.map[line.text.trim()],
         translation: tr.map[line.text.trim()],
         previous: neighbour(-1),
         next: neighbour(1),
@@ -137,7 +175,7 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
         artist: track.artists.join(", "),
       });
     },
-    [lines, track, tr.map],
+    [lines, track, tr.map, pron.map],
   );
 
   const saveTerm = useCallback(
@@ -212,6 +250,7 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
                     </span>
                   )}
                   {sameLanguage && <span>Already in {target?.name}</span>}
+                  {pron.status === "loading" && <span>Pronunciation…</span>}
                 </div>
               </div>
 
@@ -229,9 +268,10 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
                       </button>
                     }
                   >
-                    Translation unavailable: {tr.error}
+                    {tr.error}
                   </Banner>
                 )}
+                {pron.status === "error" && settings.showPronunciation && <Banner tone="warn">{pron.error}</Banner>}
                 {ready?.kind === "plain" && <Banner tone="warn">Unsynced lyrics — no timing data exists for this song, so lines won't follow along.</Banner>}
               </div>
 
@@ -249,6 +289,7 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
                         synced={synced}
                         activeIndex={activeIndex}
                         translations={tr.map}
+                        pronunciations={settings.showPronunciation ? pron.map : undefined}
                         translating={tr.status === "loading"}
                         showTranslation={showTranslation}
                         mode={settings.displayMode}
@@ -275,12 +316,16 @@ function Player({ onExpired }: { onExpired: (msg: string) => void }) {
         isSaved={(t) => vocab.has(t, settings.targetLang)}
       />
       <VocabularyPanel open={panel === "vocab"} onClose={() => setPanel(null)} items={vocab.items} onRemove={vocab.remove} syncing={!!config?.vocabularySync} syncError={vocab.syncError} />
+      {access.role === "admin" && access.accessControl && <AdminPanel open={panel === "admin"} onClose={() => setPanel("settings")} me={access.spotifyId} />}
       <SettingsPanel
         open={panel === "settings"}
         onClose={() => setPanel(null)}
         settings={settings}
         update={update}
         config={config}
+        access={access}
+        onOpenAdmin={() => setPanel("admin")}
+        onOpen={reloadAccess}
         onDisconnect={() => {
           sessionStorage.setItem("versio:notice", "Disconnected from Spotify.");
           logout();

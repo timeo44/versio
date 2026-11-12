@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthExpiredError } from "@/lib/spotify/auth";
-import { RateLimitError, getPlaybackState, type PlaybackStateResponse } from "@/lib/spotify/api";
+import { RateLimitError, SpotifyApiError, getPlaybackState, type PlaybackStateResponse } from "@/lib/spotify/api";
 import { reconcileAnchor, type Anchor } from "@/lib/playback/position";
 
 export type PlaybackStatus =
@@ -125,7 +125,15 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
         setState({ status: "auth-expired", track: null, anchor: null, message: e.message });
         return; // stop polling
       }
-      if (e instanceof RateLimitError) {
+      if (e instanceof SpotifyApiError && e.status === 403) {
+        setState({
+          status: "error",
+          track: null,
+          anchor: null,
+          message: "Spotify refused access for this account. In Development Mode the app owner must add your Spotify email under User Management in the Spotify Developer Dashboard.",
+        });
+        next = 30_000;
+      } else if (e instanceof RateLimitError) {
         next = e.retryAfterMs;
         setState((s) => ({ ...s, rateLimitedUntil: Date.now() + e.retryAfterMs }));
       } else {

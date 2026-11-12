@@ -5,9 +5,11 @@ import type { Explanation } from "@/lib/translation/types";
 import { Sheet } from "./Sheet";
 import { IconCheck, IconPlus, IconRefresh, IconSparkle } from "./icons";
 import { btn } from "./StateMessage";
+import { apiFetch } from "@/lib/api";
 
 export interface ExplainTarget {
   line: string;
+  pronunciation?: string;
   translation?: string;
   previous?: string;
   next?: string;
@@ -46,15 +48,12 @@ export function ExplanationPanel({
     if (hit) return setExp(hit);
     const ctrl = new AbortController();
     setLoading(true);
-    fetch("/api/explain", {
+    apiFetch<Explanation>("/api/explain", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...target, target: targetLang }),
       signal: ctrl.signal,
     })
-      .then(async (r) => {
-        const d = await r.json();
-        if (!r.ok) throw new Error(d?.error || "Explanation failed.");
+      .then((d) => {
         cache.set(key, d);
         setExp(d);
       })
@@ -82,7 +81,8 @@ export function ExplanationPanel({
         <div className="space-y-6">
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
             <p className="text-xl font-bold leading-snug text-white" dir="auto">{target.line}</p>
-            {target.translation && <p className="mt-2 font-serif text-lg italic text-[color:var(--accent-text)]" dir="auto">{target.translation}</p>}
+            {target.pronunciation && <p className="mt-1 text-[15px] text-white/55">{target.pronunciation}</p>}
+            {target.translation && <p className="mt-2 text-[17px] font-medium leading-snug text-[color:var(--accent-text)]" dir="auto">{target.translation}</p>}
             <div className="mt-4 flex flex-wrap gap-1.5">
               {words.map((w) => {
                 const saved = isSaved(w);

@@ -56,7 +56,8 @@ cp .env.example .env.local
 | `DEEPL_API_KEY` | one of OpenAI / DeepL | <https://www.deepl.com/your-account/keys> |
 | `TRANSLATION_PROVIDER` | no | `openai` or `deepl` (auto-detected otherwise) |
 | `LRCLIB_USER_AGENT` | recommended | Identify your app, e.g. `Versio/1.0 (https://github.com/you/versio)` |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | no | Supabase → Project Settings → API |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | recommended online | Supabase → Project Settings → API (enables user management + limits) |
+| `ADMIN_SPOTIFY_IDS` | no | Comma-separated Spotify user ids that are always admin |
 
 Secrets (`OPENAI_API_KEY`, `DEEPL_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are only read in server route handlers and are never shipped to the browser. Only `NEXT_PUBLIC_*` values (Client ID + redirect URI, both public by design) reach the client.
 
@@ -99,13 +100,29 @@ npm run typecheck
 npm run build
 ```
 
-### Optional: Supabase vocabulary sync
+### User management, rate limits & vocabulary sync (Supabase)
 
-1. Create a Supabase project.
-2. SQL Editor → run `supabase/schema.sql`.
-3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+Strongly recommended before you put Versio online — otherwise anyone Spotify lets in can use your OpenAI key without limits.
 
-The browser sends its Spotify token to `/api/vocabulary`; the server verifies it with Spotify (`GET /v1/me`) and scopes all rows to that Spotify user id. RLS is enabled with no public policies, so only the server can read or write.
+1. Create a Supabase project (free tier is fine).
+2. SQL Editor → paste and run `supabase/schema.sql`.
+3. Project Settings → API → set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (server-only secret).
+4. Sign in to Versio **yourself first** — the first account becomes admin. (Or set `ADMIN_SPOTIFY_IDS` to your Spotify user id.)
+5. Settings → **User management**:
+   - **Invite** by email → copy the one-time link or send it by email. Also add the same email in the Spotify Developer Dashboard → User Management (Spotify can't be automated; max. 5 users in Development Mode).
+   - People who sign in without an invite show up under **Waiting for approval**.
+   - Block, remove, promote to admin, set **per-user limits**.
+   - **Default rate limits**: translated lines and explanations per hour / per day. Cached translations are free; admins are unlimited.
+
+Every API route verifies the caller's Spotify token with Spotify (`GET /v1/me`) and checks the user's status. Quotas are enforced atomically in Postgres (`consume_quota`). All tables have RLS on with no public policies, so only the server can read or write.
+
+### Pronunciation
+
+Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI, cached per line, counted as translated lines.
+
+### Install on your phone
+
+Open the deployed URL in Safari → Share → **Add to Home Screen** (Android/Chrome: menu → Install app). Versio then runs full-screen like a native app.
 
 ## 7. Deploy
 

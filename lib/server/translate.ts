@@ -123,7 +123,8 @@ async function translateDeepL(req: TranslateRequest, missing: string[]) {
 
 // ── Public API ───────────────────────────────────────────────
 
-export async function translateLines(req: TranslateRequest): Promise<TranslateResponse> {
+/** `charge` runs before the provider is called, with the number of uncached lines (may throw to deny). */
+export async function translateLines(req: TranslateRequest, charge?: (lines: number) => Promise<void>): Promise<TranslateResponse> {
   const provider = activeProvider();
   if (provider === "none") throw new TranslationUnavailableError("No translation provider configured (set OPENAI_API_KEY or DEEPL_API_KEY).", 501);
 
@@ -137,6 +138,7 @@ export async function translateLines(req: TranslateRequest): Promise<TranslateRe
 
   let sourceLanguage = langCache.get(`${provider}|${ctxKey(req)}`) ?? null;
   if (missing.length) {
+    await charge?.(missing.length);
     const r = provider === "openai" ? await translateOpenAI(req, missing) : await translateDeepL(req, missing);
     missing.forEach((line, i) => {
       out[line] = r.translations[i];
@@ -150,11 +152,12 @@ export async function translateLines(req: TranslateRequest): Promise<TranslateRe
   return { translations: out, sourceLanguage, provider };
 }
 
-export async function explainLine(req: ExplainRequest): Promise<Explanation> {
+export async function explainLine(req: ExplainRequest, charge?: () => Promise<void>): Promise<Explanation> {
   if (!explanationsAvailable()) throw new TranslationUnavailableError("Line explanations require an OpenAI API key.", 501);
   const key = `${req.target}|${req.artist ?? ""}|${req.title ?? ""}|${req.line}`;
   const cached = explainCache.get(key);
   if (cached) return cached;
+  await charge?.();
 
   const targetName = getLanguage(req.target)?.english ?? req.target;
   const system = `You explain song lyrics to a language learner. Write every explanation in ${targetName}.
@@ -187,4 +190,45 @@ Respond with JSON:
   };
   explainCache.set(key, exp);
   return exp;
+}
+
+// ── Pronunciation (romanization) ─────────────────────────────
+
+const romanCache = new LruCache<string>(20_000, 1000 * 60 * 60 * 24 * 30);
+
+const ROMANIZE_SYSTEM = `You transliterate song lyrics into the Latin alphabet so a casual listener can sing along.
+Rules:
+- Show how the line SOUNDS, not what it means. Never translate.
+- Use the common, easy-to-read convention: Arabic → simple Latin transliteration without special diacritics (e.g. "habibi", "ya albi"), reflecting dialect pronunciation if the lyrics are dialect;
+  Japanese → Hepburn; Korean → Revised Romanization; Chinese → pinyin with tone marks; Russian/Ukrainian/Greek/Hindi/Hebrew/Persian/Thai → standard simple transliteration.
+- Keep words that are already in Latin script unchanged.
+- Exactly one output per input line, same order.
+Respond with JSON: {"romanizations": ["...", ...]}`;
+
+export const romanizationAvailable = () => !!process.env.OPENAI_API_KEY;
+
+export async function romanizeLines(lines: string[], ctx: { title?: string; artist?: string }, charge?: (n: number) => Promise<void>) {
+  if (!romanizationAvailable()) throw new TranslationUnavailableError("Pronunciation needs an OpenAI API key.", 501);
+  const out: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const l of lines) {
+    const hit = romanCache.get(l);
+    if (hit !== undefined) out[l] = hit;
+    else missing.push(l);
+  }
+  if (!missing.length) return out;
+  await charge?.(missing.length);
+  const header = ctx.title ? `Song: "${ctx.title}"${ctx.artist ? ` by ${ctx.artist}` : ""}\n` : "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await openaiJSON<{ romanizations?: unknown }>(ROMANIZE_SYSTEM, `${header}Transliterate these ${missing.length} lines:\n${missing.map((l, i) => `${i + 1}. ${l}`).join("\n")}`);
+    const arr = Array.isArray(r.romanizations) ? r.romanizations.map((x) => String(x ?? "").replace(/^\d+\.\s*/, "")) : [];
+    if (arr.length === missing.length) {
+      missing.forEach((l, i) => {
+        out[l] = arr[i];
+        romanCache.set(l, arr[i]);
+      });
+      return out;
+    }
+  }
+  throw new TranslationUnavailableError("Pronunciation came back malformed. Please retry.", 502);
 }

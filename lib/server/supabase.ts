@@ -18,7 +18,7 @@ const profileCache = new LruCache<SpotifyProfile>(500, 1000 * 60 * 10);
  * not allow-listed in the Spotify app can't exist in Development Mode, so a
  * valid token is already a first gate.
  */
-export async function spotifyProfileFromRequest(req: Request): Promise<SpotifyProfile | null> {
+export async function spotifyProfileFromRequest(req: Request): Promise<SpotifyProfile | null | "not_registered"> {
   const auth = req.headers.get("authorization");
   const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return null;
@@ -29,6 +29,8 @@ export async function spotifyProfileFromRequest(req: Request): Promise<SpotifyPr
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(6000),
     });
+    // Development Mode: accounts not added in the Spotify dashboard get 403
+    if (res.status === 403) return "not_registered";
     if (!res.ok) return null;
     const me = (await res.json()) as { id?: string; display_name?: string | null };
     if (!me.id) return null;
@@ -60,5 +62,6 @@ export async function rest<T = unknown>(path: string, init: RequestInit & { pref
 }
 
 export async function spotifyUserFromRequest(req: Request): Promise<string | null> {
-  return (await spotifyProfileFromRequest(req))?.id ?? null;
+  const p = await spotifyProfileFromRequest(req);
+  return p && p !== "not_registered" ? p.id : null;
 }

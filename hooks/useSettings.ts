@@ -10,10 +10,12 @@ export interface Settings {
   displayMode: DisplayMode;
   /** + shows lyrics earlier, − later */
   offsetMs: number;
+  /** Latin-script transliteration under non-Latin lyrics */
+  showPronunciation: boolean;
 }
 
 const KEY = "versio:settings";
-const DEFAULTS: Settings = { targetLang: DEFAULT_TARGET, displayMode: "both", offsetMs: 0 };
+const DEFAULTS: Settings = { targetLang: DEFAULT_TARGET, displayMode: "both", offsetMs: 0, showPronunciation: false };
 
 export function useSettings() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);

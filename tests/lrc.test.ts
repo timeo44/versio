@@ -74,3 +74,13 @@ test("prioritizedChunks starts at the current line and wraps", () => {
   assert.deepEqual(prioritizedChunks(lines, 3, missing, 2), [["l3", "l4"], ["l0", "l1"]]);
   assert.deepEqual(prioritizedChunks(lines, -1, missing, 10), [["l0", "l1", "l3", "l4"]]);
 });
+
+test("needsRomanization detects non-Latin scripts only", async () => {
+  const { needsRomanization } = await import("../lib/lyrics/lrc");
+  assert.equal(needsRomanization("Bailando lento, pensando en ti"), false);
+  assert.equal(needsRomanization("Ça va? Größe — ñ!"), false);
+  assert.equal(needsRomanization("يا قلبي"), true);
+  assert.equal(needsRomanization("君の名は"), true);
+  assert.equal(needsRomanization("사랑해 baby"), true);
+  assert.equal(needsRomanization("Привет"), true);
+});

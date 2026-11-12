@@ -162,3 +162,8 @@ export function formatTime(ms: number): string {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
+
+/** True if the text contains letters outside the Latin script (Arabic, CJK, Cyrillic, …). */
+export function needsRomanization(text: string): boolean {
+  return /[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(text);
+}

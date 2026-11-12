@@ -34,7 +34,7 @@ export function TopBar({
 }) {
   const s = STATUS[status];
   return (
-    <header className="relative z-30 flex h-16 items-center justify-between gap-3 px-4 md:px-8">
+    <header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] items-center pt-[env(safe-area-inset-top)] justify-between gap-3 px-4 md:px-8">
       <div className="flex items-center gap-2.5">
         <Logo />
         <span className="hidden text-[15px] font-semibold tracking-tight text-white sm:inline">Versio</span>

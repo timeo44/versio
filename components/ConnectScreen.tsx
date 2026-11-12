@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { pendingInvite } from "@/hooks/useAccess";
 import { startLogin } from "@/lib/spotify/auth";
 import { SPOTIFY_CLIENT_ID } from "@/lib/spotify/config";
 import { IconSpotify, Logo } from "./icons";
@@ -10,6 +11,8 @@ export function ConnectScreen({ notice }: { notice?: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const configured = !!SPOTIFY_CLIENT_ID;
+  const [invited, setInvited] = useState(false);
+  useEffect(() => setInvited(!!pendingInvite()), []);
 
   const connect = async () => {
     setBusy(true);
@@ -44,6 +47,9 @@ export function ConnectScreen({ notice }: { notice?: string }) {
           Versio follows what you're listening to on Spotify and shows time-synced lyrics with a natural translation — line by line, as it's sung.
         </p>
 
+        {invited && !notice && (
+          <p className="mx-auto mt-6 max-w-sm rounded-2xl border border-spotify/25 bg-spotify/[0.07] px-4 py-2.5 text-sm text-white/85">You've been invited 🎉 Connect Spotify to get started.</p>
+        )}
         {notice && <p className="mx-auto mt-6 max-w-sm rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] px-4 py-2.5 text-sm text-amber-100/90">{notice}</p>}
 
         <div className="mt-10">

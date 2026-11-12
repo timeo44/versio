@@ -15,6 +15,10 @@ export class LruCache<V> {
     return hit.v;
   }
 
+  delete(key: string) {
+    this.map.delete(key);
+  }
+
   set(key: string, v: V) {
     this.map.delete(key);
     this.map.set(key, { v, exp: Date.now() + this.ttlMs });

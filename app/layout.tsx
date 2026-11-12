@@ -8,7 +8,8 @@ const serif = Instrument_Serif({ subsets: ["latin", "latin-ext"], weight: "400",
 export const metadata: Metadata = {
   title: "Versio — Live lyrics, translated",
   description: "Time-synced Spotify lyrics with natural, line-by-line translation.",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "Versio", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

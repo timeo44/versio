@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { LyricLine, LyricsKind } from "@/lib/lyrics/lrc";
 import type { TrackInfo } from "./usePlayback";
+import { apiFetch } from "@/lib/api";
 
 export type LyricsState =
   | { status: "idle" }
@@ -35,11 +36,10 @@ export function useLyrics(track: TrackInfo | null, retryNonce = 0): LyricsState 
       album: track.album,
       duration: String(track.durationMs),
     });
-    fetch(`/api/lyrics?${params}`, { signal: ctrl.signal })
-      .then(async (r) => {
-        const data = await r.json();
-        if (!r.ok) throw new Error(data?.error || "Lyrics lookup failed.");
-        const ready = { status: "ready" as const, trackKey: key, kind: data.kind as LyricsKind, lines: data.lines as LyricLine[], source: data.source };
+    apiFetch<{ kind: LyricsKind; lines: LyricLine[]; source?: { provider: string; id: number } }>(`/api/lyrics?${params}`, { signal: ctrl.signal })
+      .then((data) => {
+        if (ctrl.signal.aborted) return;
+        const ready = { status: "ready" as const, trackKey: key, kind: data.kind, lines: data.lines, source: data.source };
         memo.set(key, ready);
         setState(ready);
       })

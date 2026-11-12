@@ -120,3 +120,20 @@ test("DeepL provider: unsupported target is rejected cleanly", async () => {
   const { translateLines } = await import("../lib/server/translate");
   await assert.rejects(translateLines({ lines: ["x"], target: "hi" }), /does not support/);
 });
+
+test("romanization: one per line, cached", async () => {
+  process.env.OPENAI_API_KEY = "sk-test";
+  const { romanizeLines } = await import("../lib/server/translate");
+  let n = 0;
+  handler = (_u, init) => {
+    n++;
+    assert.match(JSON.parse(String(init?.body)).messages[0].content, /Never translate/);
+    return json({ choices: [{ message: { content: JSON.stringify({ romanizations: ["ya albi", "1. habibi"] }) } }] });
+  };
+  const charged: number[] = [];
+  const r = await romanizeLines(["يا قلبي", "حبيبي"], { title: "T" }, async (k) => void charged.push(k));
+  assert.deepEqual(r, { "يا قلبي": "ya albi", "حبيبي": "habibi" });
+  await romanizeLines(["حبيبي"], {}, async (k) => void charged.push(k));
+  assert.equal(n, 1);
+  assert.deepEqual(charged, [2]);
+});

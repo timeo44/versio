@@ -6,6 +6,7 @@ import type { ProviderName } from "@/lib/translation/types";
 export interface AppConfig {
   provider: ProviderName;
   explanations: boolean;
+  pronunciation: boolean;
   vocabularySync: boolean;
 }
 
@@ -15,7 +16,7 @@ export function useConfig(): AppConfig | null {
     fetch("/api/config")
       .then((r) => r.json())
       .then(setCfg)
-      .catch(() => setCfg({ provider: "none", explanations: false, vocabularySync: false }));
+      .catch(() => setCfg({ provider: "none", explanations: false, pronunciation: false, vocabularySync: false }));
   }, []);
   return cfg;
 }

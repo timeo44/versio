@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { prioritizedChunks, type LyricLine } from "@/lib/lyrics/lrc";
 import type { TranslateResponse } from "@/lib/translation/types";
+import { ApiError, apiFetch } from "@/lib/api";
 
 export interface TranslationState {
   map: Record<string, string>;
@@ -88,17 +89,12 @@ export function useTranslations(opts: {
     let failed: string | null = null;
     setState({ map, sourceLanguage: src, status: "loading", pending: remaining });
 
-    const run = async (chunk: string[]) => {
-      const res = await fetch("/api/translate", {
+    const run = (chunk: string[]) =>
+      apiFetch<TranslateResponse>("/api/translate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lines: chunk, target, context: { title, artist, lyrics: fullLyrics } }),
         signal: ctrl.signal,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `Translation failed (${res.status})`);
-      return data as TranslateResponse;
-    };
 
     const apply = (r: TranslateResponse) => {
       if (ctrl.signal.aborted) return;
@@ -126,6 +122,7 @@ export function useTranslations(opts: {
               if (ctrl.signal.aborted) return;
               failed = e instanceof Error ? e.message : "Translation failed.";
               remaining -= 1;
+              if (e instanceof ApiError && (e.status === 429 || e.status === 403)) queue.length = 0;
             }
           }
         });
