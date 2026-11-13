@@ -76,7 +76,7 @@ jobs:
           done
           args+=("ALLOWED_ORIGINS=https://${{ github.repository_owner }}.github.io,http://127.0.0.1:3000")
           args+=("LRCLIB_USER_AGENT=Versio/1.0 (https://github.com/${{ github.repository }})")
-          if ! out=$(supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}" 2>&1); then
+          if ! out=$(supabase secrets set --project-ref "$PROJECT_REF" --yes "${args[@]}" 2>&1); then
             echo "$out"
             msg=$(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | sed 's/sk-[A-Za-z0-9_-]*/sk-***/g')
             echo "::warning title=supabase secrets set::$msg — set OPENAI_API_KEY in Supabase → Edge Functions → Secrets instead."
@@ -85,7 +85,7 @@ jobs:
       - name: Deploy edge function
         run: |
           supabase --version
-          if ! out=$(supabase functions deploy versio-api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api 2>&1); then
+          if ! out=$(supabase functions deploy versio-api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes 2>&1); then
             echo "$out"
             # surface the real error as a public annotation
             msg=$(echo "$out" | grep -v '^\s*$' | tail -n 6 | tr '\n' ' ')
