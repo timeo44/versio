@@ -34,6 +34,7 @@ import {
 import { TranslationUnavailableError, activeProvider, explainLine, explanationsAvailable, romanizationAvailable, romanizeLines, translateLines } from "./translate";
 import { rest, supabaseEnabled } from "./supabase";
 import { getCredits, setCreditBalance } from "./credits";
+import { checkSpend, monitorKeyValid } from "./monitor";
 import { getLanguage } from "@/lib/languages";
 import type { ExplainRequest, TranslateRequest } from "@/lib/translation/types";
 import type { VocabEntry } from "@/lib/vocabulary/types";
@@ -136,6 +137,11 @@ async function route(req: Request, path: string): Promise<Response> {
   }
 
   if (path === "/vocabulary") return vocabulary(req);
+
+  if (m === "GET" && path === "/monitor") {
+    if (!(await monitorKeyValid(new URL(req.url).searchParams.get("key")))) return json({ error: "Unauthorized" }, 401);
+    return json(await checkSpend());
+  }
 
   if (path === "/admin/credits") {
     await requireAdmin(req);

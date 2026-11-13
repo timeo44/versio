@@ -75,7 +75,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => 
   if (method === "POST") {
     const body = JSON.parse(String(init.body));
     const pk = table === "app_users" ? "spotify_id" : table === "invites" ? "code" : "id";
-    const existing = rows.find((r) => r[pk] === body[pk]);
+    const existing =
+      table === "usage"
+        ? rows.find((r) => r.spotify_id === body.spotify_id && r.kind === body.kind && r.bucket === body.bucket)
+        : rows.find((r) => r[pk] === body[pk]);
     if (existing) Object.assign(existing, body);
     else rows.push({ created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 864e5).toISOString(), limits: null, ...body });
     return json([existing ?? rows[rows.length - 1]], 201);
@@ -172,4 +175,28 @@ test("credits: spend from the costs API is subtracted from the entered balance",
   c = await getCredits(true);
   assert.equal(c.balance, 25);
   await assert.rejects(setCreditBalance(-3));
+});
+
+test("monitor: notifies once per CHF spent, key required", async () => {
+  const { monitorKeyValid, checkSpend } = await import("../lib/server/monitor");
+  assert.equal(await monitorKeyValid(null), false);
+  assert.equal(await monitorKeyValid("wrong"), false);
+  process.env.MONITOR_KEY_SHA256 = (await import("node:crypto")).createHash("sha256").update("test-key").digest("hex");
+  assert.equal(await monitorKeyValid("test-key"), true);
+  delete process.env.MONITOR_KEY_SHA256;
+
+  process.env.OPENAI_ADMIN_KEY = "sk-admin-test";
+  process.env.USD_PER_CHF = "1";
+  process.env.NOTIFY_STEP_CHF = "0.5";
+  const today = Math.floor(Date.now() / 86400000) * 86400000;
+  db.app_settings[0].credit_balance = 10;
+  db.app_settings[0].credit_as_of = new Date(today - 86400000 * 2).toISOString(); // whole day-2 (1.50) + 1.00 + 0.40 = 2.90
+  const first = await checkSpend();
+  assert.equal(first.ok, true);
+  assert.equal(first.notify, true);
+  assert.equal(first.stepsChf, 2.5); // five 0.5-steps
+  const second = await checkSpend();
+  assert.equal(second.notify, false, "same step is not announced twice");
+  delete process.env.USD_PER_CHF;
+  delete process.env.NOTIFY_STEP_CHF;
 });
