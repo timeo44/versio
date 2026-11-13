@@ -64,13 +64,14 @@ jobs:
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_ADMIN_KEY: ${{ secrets.OPENAI_ADMIN_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
           TRANSLATION_PROVIDER: ${{ vars.TRANSLATION_PROVIDER }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ADMIN_SPOTIFY_IDS: ${{ vars.ADMIN_SPOTIFY_IDS }}
         run: |
           args=()
-          for k in OPENAI_API_KEY DEEPL_API_KEY TRANSLATION_PROVIDER OPENAI_MODEL ADMIN_SPOTIFY_IDS; do
+          for k in OPENAI_API_KEY OPENAI_ADMIN_KEY DEEPL_API_KEY TRANSLATION_PROVIDER OPENAI_MODEL ADMIN_SPOTIFY_IDS; do
             v="${!k}"
             [ -n "$v" ] && args+=("$k=$v")
           done

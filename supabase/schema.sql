@@ -43,6 +43,10 @@ create table if not exists public.app_settings (
 );
 insert into public.app_settings (id) values (1) on conflict do nothing;
 
+-- OpenAI credit tracking (balance entered by the admin + when)
+alter table public.app_settings add column if not exists credit_balance numeric;
+alter table public.app_settings add column if not exists credit_as_of   timestamptz;
+
 -- Usage counters (hour and day buckets, UTC)
 create table if not exists public.usage (
   spotify_id  text not null,

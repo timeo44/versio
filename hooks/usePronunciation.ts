@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { needsRomanization, type LyricLine } from "@/lib/lyrics/lrc";
 import { apiFetch } from "@/lib/api";
 
-const PREFIX = "versio:rom:";
+const PREFIX = "versio:rom2:"; // bump when the server transliteration rules change
 
 /**
  * Latin transliterations for the non-Latin lines of a song (Arabic, Japanese,
@@ -42,6 +42,7 @@ export function usePronunciation(opts: { enabled: boolean; trackKey: string | nu
     }
 
     const ctrl = new AbortController();
+    const fullLyrics = lines.map((l) => l.text).join("\n");
     setStatus("loading");
     const chunks: string[][] = [];
     for (let i = 0; i < missing.length; i += 20) chunks.push(missing.slice(i, i + 20));
@@ -50,7 +51,7 @@ export function usePronunciation(opts: { enabled: boolean; trackKey: string | nu
       chunks.map((chunk) =>
         apiFetch<{ romanizations: Record<string, string> }>("/romanize", {
           method: "POST",
-          body: JSON.stringify({ lines: chunk, context: { title, artist } }),
+          body: JSON.stringify({ lines: chunk, context: { title, artist, lyrics: fullLyrics } }),
           signal: ctrl.signal,
         }).then((r) => {
           if (ctrl.signal.aborted) return;

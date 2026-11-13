@@ -57,3 +57,17 @@ export interface AdminOverview {
 
 /** Spotify Development Mode allows this many authorised users per app. */
 export const SPOTIFY_DEV_MODE_USER_LIMIT = 5;
+
+export interface CreditsInfo {
+  /** OPENAI_ADMIN_KEY configured */
+  adminKey: boolean;
+  /** balance the admin entered (USD) and when */
+  balance: number | null;
+  asOf: string | null;
+  spentSinceAsOf: number | null;
+  spentToday: number | null;
+  spentMonth: number | null;
+  /** balance − spend since asOf */
+  remaining: number | null;
+  error: string | null;
+}

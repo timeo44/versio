@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AppUserDTO, InviteDTO, Limits } from "@/lib/access/types";
+import type { AppUserDTO, CreditsInfo, InviteDTO, Limits } from "@/lib/access/types";
 import { SPOTIFY_DEV_MODE_USER_LIMIT } from "@/lib/access/types";
 import { useAdmin } from "@/hooks/useAdmin";
 import { BASE_PATH } from "@/lib/runtime";
 import { Sheet } from "./Sheet";
-import { IconCheck, IconChevron, IconPlus, IconTrash } from "./icons";
+import { IconCheck, IconChevron, IconPlus, IconRefresh, IconTrash } from "./icons";
 import { btn } from "./StateMessage";
 
 const DASHBOARD = "https://developer.spotify.com/dashboard";
@@ -24,7 +24,7 @@ const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(
 const fmtLimit = (n: number | null | undefined) => (n === null || n === undefined ? "∞" : n.toLocaleString());
 
 export function AdminPanel({ open, onClose, me }: { open: boolean; onClose: () => void; me: string }) {
-  const { data, error, busy, act, invite } = useAdmin(open);
+  const { data, error, busy, act, invite, credits, loadCredits, saveBalance } = useAdmin(open);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [created, setCreated] = useState<InviteDTO | null>(null);
@@ -48,6 +48,8 @@ export function AdminPanel({ open, onClose, me }: { open: boolean; onClose: () =
     <Sheet open={open} onClose={onClose} title="User management">
       <div className="space-y-8">
         {error && <p className="rounded-xl border border-rose-400/20 bg-rose-400/[0.08] px-3.5 py-2.5 text-sm text-rose-100/90">{error}</p>}
+
+        <CreditsCard credits={credits} busy={busy} onRefresh={() => loadCredits(true)} onSave={saveBalance} />
 
         {/* Spotify slots */}
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
@@ -379,5 +381,117 @@ function UserRow({
         </div>
       )}
     </li>
+  );
+}
+
+// ── OpenAI credits ────────────────────────────────────────────
+
+const BILLING = "https://platform.openai.com/settings/organization/billing/overview";
+const ADMIN_KEYS = "https://platform.openai.com/settings/organization/admin-keys";
+const usd = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `$${n.toFixed(2)}`);
+
+function CreditsCard({ credits, busy, onRefresh, onSave }: { credits: CreditsInfo | null; busy: boolean; onRefresh: () => void; onSave: (b: number | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+
+  const remaining = credits?.remaining ?? null;
+  const pct = credits?.balance ? Math.max(0, Math.min(100, ((remaining ?? 0) / credits.balance) * 100)) : 0;
+  const low = remaining !== null && credits?.balance ? remaining / credits.balance < 0.15 : false;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = Number(value.replace(",", ".").replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(n)) return;
+    onSave(n);
+    setEditing(false);
+    setValue("");
+  };
+
+  return (
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-white">OpenAI credits</p>
+        {credits?.adminKey && (
+          <button onClick={onRefresh} className="grid h-7 w-7 place-items-center rounded-full text-white/45 transition hover:bg-white/10 hover:text-white" aria-label="Refresh">
+            <IconRefresh width={14} height={14} />
+          </button>
+        )}
+      </div>
+
+      {!credits ? (
+        <p className="mt-2 text-[13px] text-white/40">Loading…</p>
+      ) : !credits.adminKey ? (
+        <div className="mt-2 space-y-2 text-[12px] leading-relaxed text-white/50">
+          <p>OpenAI doesn't expose your balance via API, but Versio can track your real spend with an <b className="text-white/80">admin key</b>:</p>
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>
+              Create one at{" "}
+              <a href={ADMIN_KEYS} target="_blank" rel="noreferrer" className="text-white/80 underline underline-offset-2">
+                platform.openai.com → Admin keys
+              </a>{" "}
+              (read-only is enough).
+            </li>
+            <li>
+              Supabase → Edge Functions → Secrets → add <code className="text-white/80">OPENAI_ADMIN_KEY</code>.
+            </li>
+          </ol>
+        </div>
+      ) : (
+        <>
+          {credits.error && <p className="mt-2 text-[12px] text-rose-300/90">{credits.error}</p>}
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <div>
+              <p className={`text-[28px] font-bold tabular-nums leading-none ${low ? "text-amber-300" : "text-white"}`}>{remaining !== null ? usd(remaining) : "—"}</p>
+              <p className="mt-1 text-[12px] text-white/45">{remaining !== null ? "estimated left" : "enter your balance to see what's left"}</p>
+            </div>
+            <div className="text-right text-[12px] tabular-nums text-white/55">
+              <p>today {usd(credits.spentToday)}</p>
+              <p>this month {usd(credits.spentMonth)}</p>
+            </div>
+          </div>
+          {credits.balance !== null && (
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+              <div className={`h-full rounded-full transition-all ${low ? "bg-amber-400" : "bg-spotify"}`} style={{ width: `${pct}%` }} />
+            </div>
+          )}
+        </>
+      )}
+
+      {credits && (
+        <div className="mt-3 border-t border-white/[0.05] pt-3">
+          {editing ? (
+            <form onSubmit={submit} className="flex gap-2">
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="Balance in USD, e.g. 9.85"
+                className={`${input} flex-1 tabular-nums`}
+              />
+              <button type="submit" disabled={busy || !value} className={`${btn.primary} shrink-0 disabled:opacity-40`}>
+                Save
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center justify-between gap-2 text-[12px] text-white/45">
+              <span>
+                {credits.balance !== null
+                  ? `${usd(credits.balance)} on ${fmtDate(credits.asOf)} · ${usd(credits.spentSinceAsOf)} used since`
+                  : "Copy the balance from your OpenAI billing page:"}
+              </span>
+              <div className="flex shrink-0 gap-1.5">
+                <a href={BILLING} target="_blank" rel="noreferrer" className={`${btn.ghost} !px-3 !py-1.5 text-[12px]`}>
+                  Billing
+                </a>
+                <button onClick={() => setEditing(true)} className={`${btn.ghost} !px-3 !py-1.5 text-[12px]`}>
+                  {credits.balance !== null ? "Update" : "Enter balance"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

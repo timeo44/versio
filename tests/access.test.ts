@@ -32,6 +32,18 @@ function filter(rows: Row[], params: URLSearchParams) {
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s });
 globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const url = new URL(String(input));
+  if (url.host === "api.openai.com") {
+    const now = Math.floor(Date.now() / 1000);
+    const today = Math.floor(now / 86400) * 86400;
+    return json({
+      data: [
+        { start_time: today - 2 * 86400, end_time: today - 86400, results: [{ amount: { value: 1.5, currency: "usd" } }] },
+        { start_time: today - 86400, end_time: today, results: [{ amount: { value: 0.75 } }, { amount: { value: 0.25 } }] },
+        { start_time: today, end_time: today + 86400, results: [{ amount: { value: "0.40" } }] },
+      ],
+      has_more: false,
+    });
+  }
   if (url.host === "api.spotify.com") {
     const t = tokens[String((init.headers as any).Authorization).replace("Bearer ", "")];
     if (t === 403) return json({ error: { status: 403 } }, 403);
@@ -138,4 +150,26 @@ test("sanitizeLimits validates input", async () => {
   const { sanitizeLimits } = await import("../lib/server/access");
   assert.deepEqual(sanitizeLimits({ translatePerHour: 10.7 as number, explainPerDay: null }), { translatePerHour: 10, translatePerDay: null, explainPerHour: null, explainPerDay: null });
   assert.throws(() => sanitizeLimits({ translatePerDay: -1 }), /Invalid/);
+});
+
+test("credits: spend from the costs API is subtracted from the entered balance", async () => {
+  const { getCredits, setCreditBalance } = await import("../lib/server/credits");
+  let c = await getCredits(true);
+  assert.equal(c.adminKey, false, "no admin key → setup instructions");
+  assert.equal(c.remaining, null);
+
+  process.env.OPENAI_ADMIN_KEY = "sk-admin-test";
+  // balance entered "yesterday at noon" → half of yesterday + today count
+  const today = Math.floor(Date.now() / 86400000) * 86400000;
+  db.app_settings[0].credit_balance = 10;
+  db.app_settings[0].credit_as_of = new Date(today - 86400000 / 2).toISOString();
+  c = await getCredits(true);
+  assert.equal(c.spentToday, 0.4);
+  assert.equal(c.spentSinceAsOf, 0.9); // 0.5 (half of yesterday's 1.00) + 0.40
+  assert.equal(c.remaining, 9.1);
+
+  await setCreditBalance(25);
+  c = await getCredits(true);
+  assert.equal(c.balance, 25);
+  await assert.rejects(setCreditBalance(-3));
 });

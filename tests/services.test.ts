@@ -127,11 +127,15 @@ test("romanization: one per line, cached", async () => {
   let n = 0;
   handler = (_u, init) => {
     n++;
-    assert.match(JSON.parse(String(init?.body)).messages[0].content, /Never translate/);
+    const b = JSON.parse(String(init?.body));
+    assert.match(b.messages[0].content, /never translate/i);
+    assert.match(b.messages[0].content, /sun-letter assimilation/);
+    assert.equal(b.model, "gpt-4.1");
+    assert.match(b.messages[1].content, /Full lyrics for context/);
     return json({ choices: [{ message: { content: JSON.stringify({ romanizations: ["ya albi", "1. habibi"] }) } }] });
   };
   const charged: number[] = [];
-  const r = await romanizeLines(["يا قلبي", "حبيبي"], { title: "T" }, async (k) => void charged.push(k));
+  const r = await romanizeLines(["يا قلبي", "حبيبي"], { title: "T", lyrics: "يا قلبي\nحبيبي" }, async (k) => void charged.push(k));
   assert.deepEqual(r, { "يا قلبي": "ya albi", "حبيبي": "habibi" });
   await romanizeLines(["حبيبي"], {}, async (k) => void charged.push(k));
   assert.equal(n, 1);

@@ -102,11 +102,21 @@ Every API call verifies the caller's Spotify token with Spotify (`GET /v1/me`) a
 
 Without Supabase (local dev), anyone who can log in with Spotify gets full access and there are no limits.
 
-## 6. Pronunciation
+## 6. OpenAI credits
 
-Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI, cached, counted as translated lines.
+OpenAI has no API for your remaining prepaid balance. Versio works around it: in **User management → OpenAI credits** you enter the balance shown on your OpenAI billing page once, and Versio subtracts the real spend since then (organization Costs API).
 
-## 7. Install on your phone
+1. platform.openai.com → **Admin keys** → create one (read-only is enough).
+2. Supabase → Edge Functions → **Secrets** → add `OPENAI_ADMIN_KEY`.
+3. In Versio: User management → OpenAI credits → **Enter balance**. Update it whenever you top up.
+
+Shows estimated balance left, spend today and this month (refreshed every 5 min).
+
+## 7. Pronunciation
+
+Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI (`OPENAI_ROMANIZE_MODEL`, default `gpt-4.1`) with the full song as context. For Arabic it first identifies the dialect (Levantine, Egyptian, Gulf, …) and transliterates how it's actually sung: all vowels written, long vowels doubled, sun-letter assimilation, no Arabizi digits. Cached, counted as translated lines.
+
+## 8. Install on your phone
 
 Open the site in Safari → Share → **Add to Home Screen** (Android/Chrome: menu → Install app).
 

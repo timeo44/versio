@@ -33,6 +33,7 @@ import {
 } from "./access";
 import { TranslationUnavailableError, activeProvider, explainLine, explanationsAvailable, romanizationAvailable, romanizeLines, translateLines } from "./translate";
 import { rest, supabaseEnabled } from "./supabase";
+import { getCredits, setCreditBalance } from "./credits";
 import { getLanguage } from "@/lib/languages";
 import type { ExplainRequest, TranslateRequest } from "@/lib/translation/types";
 import type { VocabEntry } from "@/lib/vocabulary/types";
@@ -127,14 +128,29 @@ async function route(req: Request, path: string): Promise<Response> {
 
   if (m === "POST" && path === "/romanize") {
     const user = await authenticate(req);
-    const b = await body<{ lines?: unknown; context?: { title?: string; artist?: string } }>(req);
+    const b = await body<{ lines?: unknown; context?: { title?: string; artist?: string; lyrics?: string } }>(req);
     const lines = Array.isArray(b?.lines) ? b.lines.filter((l): l is string => typeof l === "string" && !!l.trim()).map((l) => l.slice(0, 500)) : [];
     if (!lines.length || lines.length > 80) return json({ error: "Send 1–80 lines per request." }, 400);
-    const romanizations = await romanizeLines(lines, { title: s(b?.context?.title, 200), artist: s(b?.context?.artist, 200) }, (n) => consumeQuota(user, "translate", n));
+    const romanizations = await romanizeLines(lines, { title: s(b?.context?.title, 200), artist: s(b?.context?.artist, 200), lyrics: s(b?.context?.lyrics, 20_000) }, (n) => consumeQuota(user, "translate", n));
     return json({ romanizations });
   }
 
   if (path === "/vocabulary") return vocabulary(req);
+
+  if (path === "/admin/credits") {
+    await requireAdmin(req);
+    if (m === "POST") {
+      const b = await body<{ balance?: number | null }>(req);
+      const v = b?.balance === null || b?.balance === undefined ? null : Number(b.balance);
+      try {
+        await setCreditBalance(v);
+      } catch {
+        throw new HttpError(400, "bad_balance", "Enter a balance in USD, e.g. 9.85");
+      }
+      return json(await getCredits(true));
+    }
+    return json(await getCredits(new URL(req.url).searchParams.has("fresh")));
+  }
 
   if (path === "/admin") {
     const admin = await requireAdmin(req);

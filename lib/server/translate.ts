@@ -31,13 +31,13 @@ const ctxKey = (r: TranslateRequest) => `${r.context?.artist ?? ""}|${r.context?
 
 // ── OpenAI ───────────────────────────────────────────────────
 
-async function openaiJSON<T>(system: string, user: string, timeoutMs = 25_000): Promise<T> {
+async function openaiJSON<T>(system: string, user: string, timeoutMs = 25_000, model?: string): Promise<T> {
   const base = (env("OPENAI_BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, "");
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${env("OPENAI_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: env("OPENAI_MODEL") || "gpt-4.1-mini",
+      model: model || env("OPENAI_MODEL") || "gpt-4.1-mini",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
@@ -195,38 +195,54 @@ Respond with JSON:
 
 // ── Pronunciation (romanization) ─────────────────────────────
 
+const ROMAN_VERSION = "v2"; // bump to invalidate cached transliterations
 const romanCache = new LruCache<string>(20_000, 1000 * 60 * 60 * 24 * 30);
 
-const ROMANIZE_SYSTEM = `You transliterate song lyrics into the Latin alphabet so a casual listener can sing along.
-Rules:
-- Show how the line SOUNDS, not what it means. Never translate.
-- Use the common, easy-to-read convention: Arabic → simple Latin transliteration without special diacritics (e.g. "habibi", "ya albi"), reflecting dialect pronunciation if the lyrics are dialect;
-  Japanese → Hepburn; Korean → Revised Romanization; Chinese → pinyin with tone marks; Russian/Ukrainian/Greek/Hindi/Hebrew/Persian/Thai → standard simple transliteration.
-- Keep words that are already in Latin script unchanged.
-- Exactly one output per input line, same order.
+const ROMANIZE_SYSTEM = `You write sing-along transliterations of song lyrics in the Latin alphabet.
+Show how each line SOUNDS when sung — never translate. Keep words already in Latin script unchanged.
+Exactly one output per input line, same order. Use the full lyrics for context and spell each recurring word identically throughout the song.
+
+ARABIC (most important — be precise):
+1. First decide which variety is sung — Levantine, Egyptian, Gulf/Khaleeji, Iraqi, Maghrebi, Sudanese or Modern Standard (fusha) — from vocabulary and spelling, and transliterate the way a native singer of that variety pronounces it, not letter by letter. Examples: Egyptian ج = g ("gamil"); Levantine/Egyptian urban ق = ' ("'albi"); Gulf ق = g ("galbi"); Gulf ك can be ch; colloquial ث → t/s and ذ → d/z where that is how it's said.
+2. Write all the vowels you hear — Arabic script omits short vowels. Long vowels doubled: aa, ii, uu (ee/oo for dialect long e/o). Short vowels: a, i, u (e/o where the dialect has them).
+3. Consonants, plain ASCII only (no diacritics, no Arabizi digits like 3/7/2): ع → ' · ء (hamza) → ' mid-word, nothing at the start · ح → h · خ → kh · غ → gh · ش → sh · ج → j (g in Egyptian) · ث → th · ذ → dh · ظ → dh/z · ص → s · ض → d · ط → t · ق → q in fusha, otherwise as pronounced · و → w (or uu/oo as vowel) · ي → y (or ii/ee as vowel).
+4. Shadda (doubled consonant) → write the consonant twice: "habbeit", "ya rabb".
+5. Definite article as sung, with sun-letter assimilation and a hyphen: el-'amar, esh-shams, en-nour (fusha: al-qamar, ash-shams).
+6. Taa marbuta: -a / -e at the end, -it / -at before a following noun.
+7. Common words in their familiar spelling when it matches the sound: habibi, ya, inta/enta, inti/enti, wallah, leil/layl.
+
+OTHER SCRIPTS: Japanese → Hepburn with long vowels as ou/uu (not macrons); Korean → Revised Romanization, spaced by word; Chinese → pinyin with tone marks, spaced by word; Russian/Ukrainian/Greek/Hebrew/Persian/Hindi/Thai → simple standard transliteration, readable without special characters.
+
 Respond with JSON: {"romanizations": ["...", ...]}`;
 
 export const romanizationAvailable = () => !!env("OPENAI_API_KEY");
 
-export async function romanizeLines(lines: string[], ctx: { title?: string; artist?: string }, charge?: (n: number) => Promise<void>) {
+export async function romanizeLines(lines: string[], ctx: { title?: string; artist?: string; lyrics?: string }, charge?: (n: number) => Promise<void>) {
   if (!romanizationAvailable()) throw new TranslationUnavailableError("Pronunciation needs an OpenAI API key.", 501);
   const out: Record<string, string> = {};
   const missing: string[] = [];
   for (const l of lines) {
-    const hit = romanCache.get(l);
+    const hit = romanCache.get(`${ROMAN_VERSION}|${l}`);
     if (hit !== undefined) out[l] = hit;
     else missing.push(l);
   }
   if (!missing.length) return out;
   await charge?.(missing.length);
   const header = ctx.title ? `Song: "${ctx.title}"${ctx.artist ? ` by ${ctx.artist}` : ""}\n` : "";
+  const context = ctx.lyrics ? `Full lyrics for context (do not output this block):\n"""\n${ctx.lyrics.slice(0, 8000)}\n"""\n\n` : "";
+  const model = env("OPENAI_ROMANIZE_MODEL") || "gpt-4.1";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await openaiJSON<{ romanizations?: unknown }>(ROMANIZE_SYSTEM, `${header}Transliterate these ${missing.length} lines:\n${missing.map((l, i) => `${i + 1}. ${l}`).join("\n")}`);
+    const r = await openaiJSON<{ romanizations?: unknown }>(
+      ROMANIZE_SYSTEM,
+      `${header}${context}Transliterate these ${missing.length} lines${attempt ? ` (exactly ${missing.length} entries)` : ""}:\n${missing.map((l, i) => `${i + 1}. ${l}`).join("\n")}`,
+      40_000,
+      model,
+    );
     const arr = Array.isArray(r.romanizations) ? r.romanizations.map((x) => String(x ?? "").replace(/^\d+\.\s*/, "")) : [];
     if (arr.length === missing.length) {
       missing.forEach((l, i) => {
         out[l] = arr[i];
-        romanCache.set(l, arr[i]);
+        romanCache.set(`${ROMAN_VERSION}|${l}`, arr[i]);
       });
       return out;
     }
