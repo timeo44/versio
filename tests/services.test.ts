@@ -141,3 +141,10 @@ test("romanization: one per line, cached", async () => {
   assert.equal(n, 1);
   assert.deepEqual(charged, [2]);
 });
+
+test("OpenAI provider: empty credits give a clear message", async () => {
+  process.env.TRANSLATION_PROVIDER = "openai";
+  const { translateLines, TranslationUnavailableError } = await import("../lib/server/translate");
+  handler = () => json({ error: { message: "You exceeded your current quota", type: "insufficient_quota", code: "insufficient_quota" } }, 429);
+  await assert.rejects(translateLines({ lines: ["quota-line"], target: "de" }), (e: unknown) => e instanceof TranslationUnavailableError && e.status === 402 && /credits are used up/.test(e.message));
+});

@@ -122,7 +122,7 @@ export function useTranslations(opts: {
               if (ctrl.signal.aborted) return;
               failed = e instanceof Error ? e.message : "Translation failed.";
               remaining -= 1;
-              if (e instanceof ApiError && (e.status === 429 || e.status === 403)) queue.length = 0;
+              if (e instanceof ApiError && [402, 403, 429].includes(e.status)) queue.length = 0;
             }
           }
         });

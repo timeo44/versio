@@ -48,6 +48,11 @@ async function openaiJSON<T>(system: string, user: string, timeoutMs = 25_000, m
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
+    const code = body?.error?.code ?? body?.error?.type;
+    if (code === "insufficient_quota" || code === "billing_hard_limit_reached") {
+      throw new TranslationUnavailableError("OpenAI credits are used up — top up at platform.openai.com → Billing.", 402);
+    }
+    if (res.status === 401) throw new TranslationUnavailableError("The OpenAI API key was rejected.", 503);
     const msg = body?.error?.message || `OpenAI responded ${res.status}`;
     throw new TranslationUnavailableError(res.status === 429 ? "Translation provider is rate-limiting. Retrying shortly." : msg, res.status === 429 ? 429 : 503);
   }
