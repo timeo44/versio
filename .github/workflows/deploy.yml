@@ -58,7 +58,10 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Set function secrets
+      - name: Set function secrets (optional)
+        # Needs a token with "Secrets: write". If yours doesn't have it, set
+        # OPENAI_API_KEY in Supabase → Edge Functions → Secrets instead.
+        continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
@@ -73,7 +76,10 @@ jobs:
           done
           args+=("ALLOWED_ORIGINS=https://${{ github.repository_owner }}.github.io,http://127.0.0.1:3000")
           args+=("LRCLIB_USER_AGENT=Versio/1.0 (https://github.com/${{ github.repository }})")
-          supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}"
+          supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}" || {
+            echo "::warning::Could not set function secrets with this token. Set OPENAI_API_KEY in the Supabase dashboard → Edge Functions → Secrets."
+            exit 1
+          }
       - name: Deploy edge function
         run: supabase functions deploy versio-api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
 
