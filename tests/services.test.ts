@@ -130,7 +130,7 @@ test("romanization: one per line, cached", async () => {
     const b = JSON.parse(String(init?.body));
     assert.match(b.messages[0].content, /never translate/i);
     assert.match(b.messages[0].content, /sun-letter assimilation/);
-    assert.equal(b.model, "gpt-4.1");
+    assert.equal(b.model, "gpt-4.1-mini");
     assert.match(b.messages[1].content, /Full lyrics for context/);
     return json({ choices: [{ message: { content: JSON.stringify({ romanizations: ["ya albi", "1. habibi"] }) } }] });
   };

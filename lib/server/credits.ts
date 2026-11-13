@@ -31,8 +31,15 @@ export async function fetchCosts(sinceSec: number): Promise<{ total: number; day
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(15_000),
     });
-    if (res.status === 401 || res.status === 403) throw new Error("admin_key_rejected");
-    if (!res.ok) throw new Error(`OpenAI costs API responded ${res.status}`);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      let msg = detail;
+      try {
+        msg = JSON.parse(detail)?.error?.message ?? detail;
+      } catch {}
+      if (res.status === 401 || res.status === 403) throw new Error(`admin_key_rejected: ${msg}`.slice(0, 300));
+      throw new Error(`OpenAI costs API responded ${res.status}: ${msg}`.slice(0, 300));
+    }
     const body = (await res.json()) as CostsPage;
     for (const b of body.data ?? []) {
       const usd = (b.results ?? []).reduce((sum, r) => sum + (Number(r.amount?.value) || 0), 0);
@@ -87,7 +94,10 @@ export async function getCredits(fresh = false): Promise<CreditsInfo> {
     }
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
-    info.error = m === "admin_key_rejected" ? "The OpenAI admin key was rejected (needs an sk-admin-… key from an organization owner)." : "Couldn't reach the OpenAI costs API.";
+    console.error("[credits]", m);
+    info.error = m.startsWith("admin_key_rejected")
+      ? `OpenAI rejected the admin key (${m.slice(20) || "needs an sk-admin-… key"}).`
+      : `Couldn't read OpenAI costs — ${m}`;
   }
   cache.set("c", info);
   return info;

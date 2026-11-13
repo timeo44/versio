@@ -114,7 +114,7 @@ Shows estimated balance left, spend today and this month (refreshed every 5 min)
 
 ## 7. Pronunciation
 
-Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI (`OPENAI_ROMANIZE_MODEL`, default `gpt-4.1`) with the full song as context. For Arabic it first identifies the dialect (Levantine, Egyptian, Gulf, …) and transliterates how it's actually sung: all vowels written, long vowels doubled, sun-letter assimilation, no Arabizi digits. Cached, counted as translated lines.
+Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI (`OPENAI_ROMANIZE_MODEL`, default `gpt-4.1-mini`; set `gpt-4.1` for even better Arabic) with the full song as context. For Arabic it first identifies the dialect (Levantine, Egyptian, Gulf, …) and transliterates how it's actually sung: all vowels written, long vowels doubled, sun-letter assimilation, no Arabizi digits. Cached, counted as translated lines.
 
 ## 8. Install on your phone
 

@@ -235,7 +235,7 @@ export async function romanizeLines(lines: string[], ctx: { title?: string; arti
   await charge?.(missing.length);
   const header = ctx.title ? `Song: "${ctx.title}"${ctx.artist ? ` by ${ctx.artist}` : ""}\n` : "";
   const context = ctx.lyrics ? `Full lyrics for context (do not output this block):\n"""\n${ctx.lyrics.slice(0, 8000)}\n"""\n\n` : "";
-  const model = env("OPENAI_ROMANIZE_MODEL") || "gpt-4.1";
+  const model = env("OPENAI_ROMANIZE_MODEL") || env("OPENAI_MODEL") || "gpt-4.1-mini";
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await openaiJSON<{ romanizations?: unknown }>(
       ROMANIZE_SYSTEM,
