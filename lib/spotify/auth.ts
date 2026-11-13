@@ -1,6 +1,7 @@
 "use client";
 
 import { codeChallenge, randomString } from "./pkce";
+import { BASE_PATH } from "@/lib/runtime";
 import { SPOTIFY_ACCOUNTS, SPOTIFY_CLIENT_ID, SPOTIFY_SCOPES, getRedirectUri } from "./config";
 
 const TOKENS_KEY = "versio:spotify:tokens";
@@ -61,7 +62,7 @@ export async function startLogin() {
   const redirectUri = getRedirectUri();
   const redirectOrigin = new URL(redirectUri).origin;
   if (redirectOrigin !== window.location.origin) {
-    window.location.href = `${redirectOrigin}/?connect=1`;
+    window.location.href = `${redirectOrigin}${BASE_PATH}/?connect=1`;
     return;
   }
 

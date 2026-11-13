@@ -1,6 +1,8 @@
 node_modules
 .next
 out
+supabase/functions/
+supabase/.temp/
 .env
 .env.local
 .env*.local

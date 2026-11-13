@@ -17,6 +17,7 @@ import { AccessScreen } from "./AccessScreen";
 import { AdminPanel } from "./AdminPanel";
 import { captureInviteFromUrl, useAccess } from "@/hooks/useAccess";
 import type { AccessInfo } from "@/lib/access/types";
+import { BASE_PATH } from "@/lib/runtime";
 import { TopBar } from "./TopBar";
 import { NowPlaying } from "./NowPlaying";
 import { LyricsView } from "./LyricsView";
@@ -41,7 +42,7 @@ export function App() {
     // arrived via origin hop from startLogin()
     const params = new URLSearchParams(window.location.search);
     if (params.get("connect") === "1") {
-      window.history.replaceState(null, "", "/");
+      window.history.replaceState(null, "", `${BASE_PATH}/`);
       if (!hasSession()) startLogin().catch(() => {});
     }
     const n = sessionStorage.getItem("versio:notice");

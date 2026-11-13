@@ -48,7 +48,7 @@ export function usePronunciation(opts: { enabled: boolean; trackKey: string | nu
     const acc = { ...cached };
     Promise.all(
       chunks.map((chunk) =>
-        apiFetch<{ romanizations: Record<string, string> }>("/api/romanize", {
+        apiFetch<{ romanizations: Record<string, string> }>("/romanize", {
           method: "POST",
           body: JSON.stringify({ lines: chunk, context: { title, artist } }),
           signal: ctrl.signal,

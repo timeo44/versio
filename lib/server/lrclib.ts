@@ -1,5 +1,6 @@
 import { cleanTrackName, parseLrc, parsePlain, type LyricLine, type LyricsKind } from "@/lib/lyrics/lrc";
 import { LruCache } from "./cache";
+import { env } from "./env";
 
 export interface LyricsResult {
   kind: LyricsKind;
@@ -18,8 +19,8 @@ interface LrclibRecord {
   syncedLyrics: string | null;
 }
 
-const BASE = (process.env.LRCLIB_BASE_URL || "https://lrclib.net").replace(/\/$/, "");
-const UA = process.env.LRCLIB_USER_AGENT || "Versio/1.0 (live lyrics translator)";
+const BASE = (env("LRCLIB_BASE_URL") || "https://lrclib.net").replace(/\/$/, "");
+const UA = env("LRCLIB_USER_AGENT") || "Versio/1.0 (live lyrics translator)";
 const cache = new LruCache<LyricsResult>(1000, 1000 * 60 * 60 * 6);
 
 async function lrclib<T>(path: string, params: Record<string, string>): Promise<T | null> {

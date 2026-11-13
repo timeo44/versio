@@ -4,9 +4,10 @@
   "private": true,
   "description": "Live Spotify lyrics translator \u2014 synced lyrics, translated in real time.",
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "dev": "node --env-file-if-exists=.env.local --import tsx scripts/dev-api.ts & next dev -H 127.0.0.1 -p 3000",
+    "dev:api": "node --env-file-if-exists=.env.local --import tsx scripts/dev-api.ts",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3000",
+    "build:function": "node scripts/build-function.mjs",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts"
   },
@@ -20,12 +21,13 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "esbuild": "^0.25.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

@@ -1,6 +1,7 @@
 import { getLanguage } from "@/lib/languages";
 import type { Explanation, ExplainRequest, ProviderName, TranslateRequest, TranslateResponse } from "@/lib/translation/types";
 import { LruCache } from "./cache";
+import { env } from "./env";
 
 export class TranslationUnavailableError extends Error {
   constructor(message: string, public status = 503) {
@@ -10,9 +11,9 @@ export class TranslationUnavailableError extends Error {
 }
 
 export function activeProvider(): ProviderName {
-  const wanted = (process.env.TRANSLATION_PROVIDER || "").toLowerCase();
-  const hasOpenAI = !!process.env.OPENAI_API_KEY;
-  const hasDeepL = !!process.env.DEEPL_API_KEY;
+  const wanted = (env("TRANSLATION_PROVIDER") || "").toLowerCase();
+  const hasOpenAI = !!env("OPENAI_API_KEY");
+  const hasDeepL = !!env("DEEPL_API_KEY");
   if (wanted === "openai" && hasOpenAI) return "openai";
   if (wanted === "deepl" && hasDeepL) return "deepl";
   if (hasOpenAI) return "openai";
@@ -20,7 +21,7 @@ export function activeProvider(): ProviderName {
   return "none";
 }
 
-export const explanationsAvailable = () => !!process.env.OPENAI_API_KEY;
+export const explanationsAvailable = () => !!env("OPENAI_API_KEY");
 
 const lineCache = new LruCache<string>(20_000, 1000 * 60 * 60 * 24 * 7);
 const langCache = new LruCache<string>(2000, 1000 * 60 * 60 * 24 * 7);
@@ -31,12 +32,12 @@ const ctxKey = (r: TranslateRequest) => `${r.context?.artist ?? ""}|${r.context?
 // ── OpenAI ───────────────────────────────────────────────────
 
 async function openaiJSON<T>(system: string, user: string, timeoutMs = 25_000): Promise<T> {
-  const base = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const base = (env("OPENAI_BASE_URL") || "https://api.openai.com/v1").replace(/\/$/, "");
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${env("OPENAI_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+      model: env("OPENAI_MODEL") || "gpt-4.1-mini",
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
@@ -92,8 +93,8 @@ async function translateOpenAI(req: TranslateRequest, missing: string[]) {
 async function translateDeepL(req: TranslateRequest, missing: string[]) {
   const lang = getLanguage(req.target);
   if (!lang?.deepl) throw new TranslationUnavailableError(`DeepL does not support ${lang?.english ?? req.target}.`, 400);
-  const key = process.env.DEEPL_API_KEY!;
-  const base = (process.env.DEEPL_API_URL || (key.endsWith(":fx") ? "https://api-free.deepl.com" : "https://api.deepl.com")).replace(/\/$/, "");
+  const key = env("DEEPL_API_KEY")!;
+  const base = (env("DEEPL_API_URL") || (key.endsWith(":fx") ? "https://api-free.deepl.com" : "https://api.deepl.com")).replace(/\/$/, "");
   const deeplContext = [req.context?.title && `Song lyrics: "${req.context.title}" by ${req.context.artist ?? ""}`, req.context?.lyrics?.slice(0, 4000)]
     .filter(Boolean)
     .join("\n");
@@ -205,7 +206,7 @@ Rules:
 - Exactly one output per input line, same order.
 Respond with JSON: {"romanizations": ["...", ...]}`;
 
-export const romanizationAvailable = () => !!process.env.OPENAI_API_KEY;
+export const romanizationAvailable = () => !!env("OPENAI_API_KEY");
 
 export async function romanizeLines(lines: string[], ctx: { title?: string; artist?: string }, charge?: (n: number) => Promise<void>) {
   if (!romanizationAvailable()) throw new TranslationUnavailableError("Pronunciation needs an OpenAI API key.", 501);

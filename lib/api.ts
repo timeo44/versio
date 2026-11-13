@@ -1,6 +1,7 @@
 "use client";
 
 import { getAccessToken } from "@/lib/spotify/auth";
+import { API_BASE } from "@/lib/runtime";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string | undefined, message: string, public retryAfter?: number) {
@@ -11,10 +12,10 @@ export class ApiError extends Error {
 
 export const ACCESS_EVENT = "versio:access-changed";
 
-/** fetch() against our own API with the Spotify token attached. */
+/** fetch() against the Versio API (path like "/translate") with the Spotify token attached. */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,

@@ -90,7 +90,7 @@ export function useTranslations(opts: {
     setState({ map, sourceLanguage: src, status: "loading", pending: remaining });
 
     const run = (chunk: string[]) =>
-      apiFetch<TranslateResponse>("/api/translate", {
+      apiFetch<TranslateResponse>("/translate", {
         method: "POST",
         body: JSON.stringify({ lines: chunk, target, context: { title, artist, lyrics: fullLyrics } }),
         signal: ctrl.signal,

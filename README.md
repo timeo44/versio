@@ -12,7 +12,7 @@ Versio watches what you're playing on Spotify, finds **time-synced lyrics**, and
 - Vocabulary list (local, optional Supabase sync, CSV export)
 - Follow-the-line auto-scroll, free manual browsing with a "Follow live" button, timing offset for Bluetooth latency
 
-Stack: Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS 4.
+Stack: Next.js 15 (static export) · React 19 · TypeScript · Tailwind CSS 4 · Supabase Edge Functions + Postgres · GitHub Pages.
 
 ---
 
@@ -35,130 +35,110 @@ Spotify only accepts HTTPS redirect URIs, with one exception: loopback addresses
 | Environment | Redirect URI to add in Spotify | `NEXT_PUBLIC_SPOTIFY_REDIRECT_URI` |
 |---|---|---|
 | Local | `http://127.0.0.1:3000/callback` | `http://127.0.0.1:3000/callback` |
-| Production | `https://your-domain.com/callback` | `https://your-domain.com/callback` |
+| GitHub Pages | `https://<user>.github.io/<repo>/callback` | set automatically by the workflow |
 
 You can register both in the same Spotify app. The value must match **exactly** (scheme, host, port, path, no trailing slash).
 
 If you accidentally open `http://localhost:3000`, Versio automatically hops to the redirect origin before logging in (PKCE state lives in per-origin storage).
 
-## 3. Credentials
+## 3. Run locally
 
-```bash
-cp .env.example .env.local
-```
-
-| Variable | Required | Where to get it |
-|---|---|---|
-| `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` | yes | Spotify dashboard → your app → Settings |
-| `NEXT_PUBLIC_SPOTIFY_REDIRECT_URI` | yes | See table above |
-| `OPENAI_API_KEY` | one of OpenAI / DeepL | <https://platform.openai.com/api-keys> |
-| `OPENAI_MODEL` | no (default `gpt-4.1-mini`) | Any chat model with JSON mode. Small/fast models keep latency low. |
-| `DEEPL_API_KEY` | one of OpenAI / DeepL | <https://www.deepl.com/your-account/keys> |
-| `TRANSLATION_PROVIDER` | no | `openai` or `deepl` (auto-detected otherwise) |
-| `LRCLIB_USER_AGENT` | recommended | Identify your app, e.g. `Versio/1.0 (https://github.com/you/versio)` |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | recommended online | Supabase → Project Settings → API (enables user management + limits) |
-| `ADMIN_SPOTIFY_IDS` | no | Comma-separated Spotify user ids that are always admin |
-
-Secrets (`OPENAI_API_KEY`, `DEEPL_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) are only read in server route handlers and are never shipped to the browser. Only `NEXT_PUBLIC_*` values (Client ID + redirect URI, both public by design) reach the client.
-
-## 4. Lyrics provider (LRCLIB)
-
-No key needed. Versio queries LRCLIB server-side (`/api/lyrics`):
-
-1. **Exact match** — track, primary artist, album, duration (LRCLIB requires ±2 s)
-2. **Search** — cleaned title (strips "– Remastered 2011", "(feat. …)") + artist; candidates must be within **3 s** of Spotify's duration; synced lyrics preferred, closest duration wins
-3. **Fallback** — plain lyrics, shown with an "Unsynced lyrics" banner and no line highlighting
-4. Nothing found → message with a link to contribute at lrclib.net
-
-Results are cached for 6 h per server instance. To use a self-hosted LRCLIB mirror, set `LRCLIB_BASE_URL`.
-
-Spotify's Web API does **not** provide lyrics; Versio never assumes it does.
-
-## 5. Translation
-
-**OpenAI (recommended).** Each request sends the lines to translate plus the full song for context, with instructions to keep one output per input line and translate idiomatically. Responses are validated (line count) and retried once. Also powers the line breakdown panel.
-
-**DeepL.** Uses `/v2/translate` with the song title + lyrics as `context` (not billed). Free keys (`…:fx`) automatically use `api-free.deepl.com`. Languages DeepL can't target are hidden from the picker. Line explanations still need an OpenAI key.
-
-Strategy: unique lines only (choruses are translated once) → the chunk starting at the current line is sent first → the rest in parallel (3 at a time). If the song or language changes mid-flight, requests are aborted and late responses discarded. If the source language equals the target language, translation is skipped.
-
-## 6. Run locally
-
-Requirements: Node.js 20+ and a Spotify Premium account (Development Mode requirement).
+Requirements: Node.js 22+, Spotify Premium (Development Mode requirement), an OpenAI or DeepL key.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in values
-npm run dev                  # http://127.0.0.1:3000
+cp .env.example .env.local   # fill in Client ID + OpenAI key
+npm run dev                  # site on http://127.0.0.1:3000, API on :8787
 ```
 
-Open **http://127.0.0.1:3000** (not localhost), connect Spotify, play a song anywhere (phone, desktop, speaker).
+Open **http://127.0.0.1:3000** (not localhost), connect Spotify, play a song anywhere.
 
 ```bash
-npm test          # LRC parser, sync clock, PKCE, LRCLIB lookup + translation providers (mocked network)
+npm test             # parser, sync clock, PKCE, LRCLIB, providers, access control, API routing
 npm run typecheck
-npm run build
+npm run build        # static export → out/
 ```
 
-### User management, rate limits & vocabulary sync (Supabase)
+## 4. Deploy — GitHub Pages + Supabase
 
-Strongly recommended before you put Versio online — otherwise anyone Spotify lets in can use your OpenAI key without limits.
+The site is a static export on **GitHub Pages**; everything secret (OpenAI key, user management, rate limits, lyrics lookups) runs in a **Supabase Edge Function**. `.github/workflows/deploy.yml` deploys both on every push to `main`.
 
-1. Create a Supabase project (free tier is fine).
-2. SQL Editor → paste and run `supabase/schema.sql`.
-3. Project Settings → API → set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (server-only secret).
-4. Sign in to Versio **yourself first** — the first account becomes admin. (Or set `ADMIN_SPOTIFY_IDS` to your Spotify user id.)
-5. Settings → **User management**:
-   - **Invite** by email → copy the one-time link or send it by email. Also add the same email in the Spotify Developer Dashboard → User Management (Spotify can't be automated; max. 5 users in Development Mode).
-   - People who sign in without an invite show up under **Waiting for approval**.
-   - Block, remove, promote to admin, set **per-user limits**.
-   - **Default rate limits**: translated lines and explanations per hour / per day. Cached translations are free; admins are unlimited.
+**a) Supabase** (free tier is fine)
+1. Create a project at <https://supabase.com>.
+2. SQL Editor → paste `supabase/schema.sql` → **Run**.
+3. Note the **project ref** — the `xxxx` in `https://xxxx.supabase.co`.
+4. Account → **Access Tokens** → generate one (lets GitHub deploy the function).
 
-Every API route verifies the caller's Spotify token with Spotify (`GET /v1/me`) and checks the user's status. Quotas are enforced atomically in Postgres (`consume_quota`). All tables have RLS on with no public policies, so only the server can read or write.
+**b) GitHub repository**
+1. Settings → **Pages** → Source: **GitHub Actions**.
+   (Pages on a private repo needs GitHub Pro — otherwise make the repo public; no secrets are in the code.)
+2. Settings → **Secrets and variables → Actions**:
 
-### Pronunciation
+| Type | Name | Value |
+|---|---|---|
+| Variable | `SPOTIFY_CLIENT_ID` | Spotify app → Settings → Client ID |
+| Variable | `SUPABASE_PROJECT_REF` | e.g. `abcdxyz…` |
+| Secret | `SUPABASE_ACCESS_TOKEN` | from step a4 |
+| Secret | `OPENAI_API_KEY` | `sk-…` (or `DEEPL_API_KEY`) |
+| Variable (optional) | `TRANSLATION_PROVIDER`, `OPENAI_MODEL`, `ADMIN_SPOTIFY_IDS` | |
 
-Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI, cached per line, counted as translated lines.
+3. Actions → **Deploy** → *Run workflow* (or just push).
 
-### Install on your phone
+**c) Spotify** — add `https://<user>.github.io/<repo>/callback` as Redirect URI (e.g. `https://timeo44.github.io/versio/callback`).
 
-Open the deployed URL in Safari → Share → **Add to Home Screen** (Android/Chrome: menu → Install app). Versio then runs full-screen like a native app.
+**d) Sign in first.** The first account that signs in becomes admin.
 
-## 7. Deploy
+The site is then live at `https://<user>.github.io/<repo>/`. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected into edge functions by Supabase automatically; the workflow sets the rest as function secrets and restricts CORS to your GitHub Pages origin.
 
-Any host that runs Next.js route handlers works.
+## 5. User management & rate limits
 
-**Vercel**
-1. Push the repo to GitHub → <https://vercel.com/new> → import.
-2. Add the environment variables (production redirect URI!).
-3. Deploy, then add `https://<your-domain>/callback` to the Spotify app's Redirect URIs.
+Settings → **User management** (admins only):
+- **Invite** by email → one-time link (copy or send by email). Also add the same email in the Spotify Developer Dashboard → User Management — Spotify can't be automated, max. 5 users in Development Mode.
+- People who sign in without an invite appear under **Waiting for approval**.
+- Block, remove, promote to admin, per-user limits.
+- **Default rate limits**: translated lines and explanations per hour / per day. Cached translations are free; admins are unlimited.
 
-**Netlify**
-1. New site from Git → build command `npm run build` (Next.js runtime is detected automatically).
-2. Site settings → Environment variables → add the same variables.
-3. Add `https://<your-site>.netlify.app/callback` in Spotify.
+Every API call verifies the caller's Spotify token with Spotify (`GET /v1/me`) and checks the user's status. Quotas are enforced atomically in Postgres (`consume_quota`). All tables have RLS on with no public policies — only the function's service role can touch them.
 
-Note: the server-side caches are in-memory per instance. On serverless platforms they're best-effort; the browser cache still prevents repeated translations for songs you've already heard.
+Without Supabase (local dev), anyone who can log in with Spotify gets full access and there are no limits.
 
----
+## 6. Pronunciation
+
+Settings → Lyrics display → **Show pronunciation** adds a Latin-script transliteration under non-Latin lines (Arabic, Japanese, Korean, Chinese, Cyrillic, Greek, Hindi …). Generated with OpenAI, cached, counted as translated lines.
+
+## 7. Install on your phone
+
+Open the site in Safari → Share → **Add to Home Screen** (Android/Chrome: menu → Install app).
+
+## Lyrics (LRCLIB)
+
+No key needed. Lookup: exact signature match (track, artist, album, duration) → search with cleaned title, candidates within 3 s of Spotify's duration, synced preferred → plain lyrics clearly marked "Unsynced" → "No lyrics found". Spotify's Web API does **not** provide lyrics; Versio never assumes it does.
+
+## Translation
+
+**OpenAI (recommended)** — lines plus the full song as context, idiomatic rather than literal, one output per input line (validated, retried once). Also powers line explanations and pronunciation.
+**DeepL** — `/v2/translate` with the song as `context`; free keys (`…:fx`) use `api-free.deepl.com`. No explanations.
+
+Unique lines only (choruses once) → the chunk at the current line first → the rest in parallel. Song or language changes abort in-flight requests.
 
 ## Architecture
 
 ```
-app/
-  page.tsx, callback/page.tsx     UI entry + OAuth callback
-  api/lyrics      LRCLIB lookup        (server)
-  api/translate   OpenAI / DeepL       (server, secrets)
-  api/explain     line breakdown       (server, OpenAI)
-  api/vocabulary  Supabase sync        (server, optional)
-  api/config      which features are configured (no secrets)
+app/                 static pages (page.tsx, callback/) — exported to out/
+components/, hooks/  UI
 lib/
-  spotify/   pkce.ts · auth.ts (PKCE, token refresh, single-flight) · api.ts (401 retry, 429 Retry-After)
-  playback/  position.ts — playback clock + jitter smoothing
-  lyrics/    lrc.ts — LRC parser, active-line search, chunking
-  server/    lrclib.ts · translate.ts · supabase.ts · cache.ts
-hooks/       usePlayback (polling) · useClock (rAF line sync) · useLyrics · useTranslations · useVocabulary · …
-components/  App · NowPlaying · LyricsView · ExplanationPanel · VocabularyPanel · SettingsPanel · …
+  spotify/           PKCE, token refresh (single-flight), API client (401 retry, 429 Retry-After)
+  playback/          playback clock + jitter smoothing
+  lyrics/            LRC parser, active-line search, chunking
+  server/            the API — framework-free, runs on Deno and Node
+    handler.ts       routing, CORS
+    access.ts        auth, invites, roles, quotas
+    lrclib.ts · translate.ts · supabase.ts · cache.ts · env.ts
+supabase/
+  schema.sql                 tables, RLS, consume_quota()
+  functions-src/versio-api   edge function entry → bundled by scripts/build-function.mjs
+scripts/dev-api.ts           same handler as a local Node server
+.github/workflows/deploy.yml tests → edge function → GitHub Pages
 ```
 
 **Synchronisation.** Spotify only reports the position when polled (every 1.5 s while playing, 3 s paused, 5 s idle, 10 s in a background tab). Versio anchors each sample to the request's midpoint on `performance.now()` and extrapolates between polls; a `requestAnimationFrame` loop picks the active line with a binary search and re-renders only when it changes. New samples that agree with the extrapolation within 350 ms are ignored to avoid jitter; seeks and pauses reset the anchor immediately. A poll is also scheduled right when the song should end, so the next track appears without delay. The settings panel has a ± timing offset for audio-latency setups.

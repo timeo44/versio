@@ -36,7 +36,7 @@ export function useLyrics(track: TrackInfo | null, retryNonce = 0): LyricsState 
       album: track.album,
       duration: String(track.durationMs),
     });
-    apiFetch<{ kind: LyricsKind; lines: LyricLine[]; source?: { provider: string; id: number } }>(`/api/lyrics?${params}`, { signal: ctrl.signal })
+    apiFetch<{ kind: LyricsKind; lines: LyricLine[]; source?: { provider: string; id: number } }>(`/lyrics?${params}`, { signal: ctrl.signal })
       .then((data) => {
         if (ctrl.signal.aborted) return;
         const ready = { status: "ready" as const, trackKey: key, kind: data.kind, lines: data.lines, source: data.source };

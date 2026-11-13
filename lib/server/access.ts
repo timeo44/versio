@@ -1,6 +1,7 @@
 import { LruCache } from "./cache";
 import { rest, spotifyProfileFromRequest, supabaseEnabled, type SpotifyProfile } from "./supabase";
 import type { AccessInfo, AdminOverview, AppUserDTO, InviteDTO, Limits, QuotaKind } from "@/lib/access/types";
+import { env } from "./env";
 
 /**
  * Access control + rate limits.
@@ -39,7 +40,7 @@ const userCache = new LruCache<UserRow>(500, 30_000);
 let settingsCache: { at: number; v: Limits } | null = null;
 
 const ADMIN_IDS = new Set(
-  (process.env.ADMIN_SPOTIFY_IDS || "")
+  (env("ADMIN_SPOTIFY_IDS") || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),

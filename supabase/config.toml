@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config — only used to deploy the edge function.
+project_id = "versio"
+
+[functions.versio-api]
+# The function authenticates callers with their Spotify token itself.
+verify_jwt = false

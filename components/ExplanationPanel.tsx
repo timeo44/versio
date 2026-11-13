@@ -48,7 +48,7 @@ export function ExplanationPanel({
     if (hit) return setExp(hit);
     const ctrl = new AbortController();
     setLoading(true);
-    apiFetch<Explanation>("/api/explain", {
+    apiFetch<Explanation>("/explain", {
       method: "POST",
       body: JSON.stringify({ ...target, target: targetLang }),
       signal: ctrl.signal,

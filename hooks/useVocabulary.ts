@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getAccessToken } from "@/lib/spotify/auth";
+import { apiFetch } from "@/lib/api";
 import type { VocabEntry } from "@/lib/vocabulary/types";
 
 const KEY = "versio:vocabulary";
@@ -19,15 +19,8 @@ const writeLocal = (list: VocabEntry[]) => {
   } catch {}
 };
 
-async function remote(method: string, path = "", body?: unknown) {
-  const token = await getAccessToken();
-  const res = await fetch(`/api/vocabulary${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || "Sync failed");
-  return res.json();
+function remote(method: string, path = "", body?: unknown) {
+  return apiFetch<any>(`/vocabulary${path}`, { method, body: body ? JSON.stringify(body) : undefined }); // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 /**

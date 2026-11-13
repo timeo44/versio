@@ -1,7 +1,8 @@
 import { LruCache } from "./cache";
+import { env } from "./env";
 
-const URL_ = process.env.SUPABASE_URL?.replace(/\/$/, "");
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const URL_ = env("SUPABASE_URL")?.replace(/\/$/, "");
+const KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 
 export const supabaseEnabled = () => !!(URL_ && KEY);
 

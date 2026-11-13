@@ -42,14 +42,14 @@ export function useAccess() {
       let info: AccessInfo;
       if (invite) {
         try {
-          info = await apiFetch<AccessInfo>("/api/me", { method: "POST", body: JSON.stringify({ invite }) });
+          info = await apiFetch<AccessInfo>("/me", { method: "POST", body: JSON.stringify({ invite }) });
         } catch (e) {
           if (!(e instanceof ApiError) || !e.code?.startsWith("invite_")) throw e;
           inviteError = e.message;
-          info = await apiFetch<AccessInfo>("/api/me");
+          info = await apiFetch<AccessInfo>("/me");
         }
         localStorage.removeItem(INVITE_KEY);
-      } else info = await apiFetch<AccessInfo>("/api/me");
+      } else info = await apiFetch<AccessInfo>("/me");
       setState({ status: "ready", info, inviteError });
     } catch (e) {
       setState({ status: "error", code: e instanceof ApiError ? e.code : undefined, message: e instanceof Error ? e.message : "Couldn't check access." });

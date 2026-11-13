@@ -11,7 +11,7 @@ export function useAdmin(open: boolean) {
 
   const refresh = useCallback(async () => {
     try {
-      setData(await apiFetch<AdminOverview>("/api/admin"));
+      setData(await apiFetch<AdminOverview>("/admin"));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load users.");
@@ -25,7 +25,7 @@ export function useAdmin(open: boolean) {
   const act = useCallback(async <T = AdminOverview>(body: Record<string, unknown>): Promise<T | null> => {
     setBusy(true);
     try {
-      const res = await apiFetch<T>("/api/admin", { method: "POST", body: JSON.stringify(body) });
+      const res = await apiFetch<T>("/admin", { method: "POST", body: JSON.stringify(body) });
       setError(null);
       if (body.action !== "invite") setData(res as unknown as AdminOverview);
       else await refresh();

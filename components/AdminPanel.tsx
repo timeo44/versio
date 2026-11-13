@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import type { AppUserDTO, InviteDTO, Limits } from "@/lib/access/types";
 import { SPOTIFY_DEV_MODE_USER_LIMIT } from "@/lib/access/types";
 import { useAdmin } from "@/hooks/useAdmin";
+import { BASE_PATH } from "@/lib/runtime";
 import { Sheet } from "./Sheet";
 import { IconCheck, IconChevron, IconPlus, IconTrash } from "./icons";
 import { btn } from "./StateMessage";
 
 const DASHBOARD = "https://developer.spotify.com/dashboard";
 
-const inviteLink = (code: string) => `${window.location.origin}/?invite=${code}`;
+const inviteLink = (code: string) => `${window.location.origin}${BASE_PATH}/?invite=${code}`;
 
 function mailto(inv: InviteDTO) {
   const link = inviteLink(inv.code);
