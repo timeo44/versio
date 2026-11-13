@@ -76,12 +76,23 @@ jobs:
           done
           args+=("ALLOWED_ORIGINS=https://${{ github.repository_owner }}.github.io,http://127.0.0.1:3000")
           args+=("LRCLIB_USER_AGENT=Versio/1.0 (https://github.com/${{ github.repository }})")
-          supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}" || {
-            echo "::warning::Could not set function secrets with this token. Set OPENAI_API_KEY in the Supabase dashboard → Edge Functions → Secrets."
+          if ! out=$(supabase secrets set --project-ref "$PROJECT_REF" "${args[@]}" 2>&1); then
+            echo "$out"
+            msg=$(echo "$out" | grep -v '^\s*$' | tail -n 4 | tr '\n' ' ' | sed 's/sk-[A-Za-z0-9_-]*/sk-***/g')
+            echo "::warning title=supabase secrets set::$msg — set OPENAI_API_KEY in Supabase → Edge Functions → Secrets instead."
             exit 1
-          }
+          fi
       - name: Deploy edge function
-        run: supabase functions deploy versio-api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+        run: |
+          supabase --version
+          if ! out=$(supabase functions deploy versio-api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api 2>&1); then
+            echo "$out"
+            # surface the real error as a public annotation
+            msg=$(echo "$out" | grep -v '^\s*$' | tail -n 6 | tr '\n' ' ')
+            echo "::error title=supabase functions deploy::$msg"
+            exit 1
+          fi
+          echo "$out"
 
   site:
     needs: test
