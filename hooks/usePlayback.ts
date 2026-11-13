@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthExpiredError } from "@/lib/spotify/auth";
 import { RateLimitError, SpotifyApiError, getPlaybackState, type PlaybackStateResponse } from "@/lib/spotify/api";
-import { reconcileAnchor, type Anchor } from "@/lib/playback/position";
+import { positionAt, reconcileAnchor, type Anchor } from "@/lib/playback/position";
 
 export type PlaybackStatus =
   | "connecting"
@@ -114,7 +114,20 @@ export function usePlayback(enabled: boolean): PlaybackApi {
       const at = (t0 + t1) / 2;
 
       if (!data) {
-        setState({ status: "idle", track: null, anchor: null, message: "Nothing is playing on Spotify right now.", lastUpdated: Date.now() });
+        // Spotify drops the player (204) a while after pausing. Keep showing the
+        // last song as paused instead of "nothing playing".
+        setState((prev) => {
+          const last = prev.track ? { track: prev.track, progressMs: positionAt(prev.anchor, at) } : loadLastTrack();
+          if (!last) return { status: "idle", track: null, anchor: null, message: "Nothing is playing on Spotify right now.", lastUpdated: Date.now() };
+          return {
+            ...prev,
+            status: "paused",
+            track: last.track,
+            anchor: { progressMs: last.progressMs, at, isPlaying: false, durationMs: last.track.durationMs },
+            message: undefined,
+            lastUpdated: Date.now(),
+          };
+        });
       } else if (data.currently_playing_type === "ad") {
         setState((s) => ({ ...s, status: "unsupported", message: "An ad is playing — lyrics resume with the next song.", anchor: null, lastUpdated: Date.now() }));
         next = INTERVAL_PAUSED;
@@ -134,6 +147,7 @@ export function usePlayback(enabled: boolean): PlaybackApi {
           });
         } else {
           const anchor: Anchor = { progressMs: data.progress_ms ?? 0, at, isPlaying: data.is_playing, durationMs: track.durationMs };
+          saveLastTrack(track, data.progress_ms ?? 0);
           setState((prev) => {
             const sameTrack = prev.track?.key === track.key;
             return {
@@ -234,4 +248,22 @@ class StalePoll extends Error {}
 function sameDevice(prev: DeviceInfo | undefined, next: DeviceInfo | undefined): DeviceInfo | undefined {
   if (prev && next && prev.key === next.key && prev.restricted === next.restricted && prev.name === next.name) return prev;
   return next;
+}
+
+/** Last song seen, so a paused song survives Spotify dropping the player and app reloads. */
+const LAST_TRACK_KEY = "versio:last-track";
+
+function saveLastTrack(track: TrackInfo, progressMs: number) {
+  try {
+    localStorage.setItem(LAST_TRACK_KEY, JSON.stringify({ track, progressMs }));
+  } catch {}
+}
+
+function loadLastTrack(): { track: TrackInfo; progressMs: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAST_TRACK_KEY) ?? "null");
+    return v?.track?.key && typeof v.track.durationMs === "number" ? { track: v.track, progressMs: Number(v.progressMs) || 0 } : null;
+  } catch {
+    return null;
+  }
 }
