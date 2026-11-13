@@ -42,9 +42,41 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    overscroll-behavior-y: none;
+  }
   button:not(:disabled),
   [role="button"] {
     cursor: pointer;
+  }
+  /* Touch: no grey/black tap flash, no 300 ms double-tap delay */
+  button,
+  a,
+  label,
+  input,
+  [role="button"],
+  [role="switch"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* No focus ring after a tap/click (iOS keeps it on the tapped element) —
+     keyboard users still get a clear ring via :focus-visible */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(255 255 255 / 0.5);
+    outline-offset: 2px;
+  }
+  input:focus-visible,
+  [role="button"]:focus-visible {
+    outline: none;
+  }
+  button:disabled {
+    cursor: default;
   }
   ::selection {
     background: rgba(255, 255, 255, 0.2);

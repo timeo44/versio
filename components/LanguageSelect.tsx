@@ -43,24 +43,25 @@ export function LanguageSelect({ value, onChange, provider }: { value: string; o
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] pl-3 pr-2.5 text-sm font-medium text-white/90 transition hover:bg-white/[0.08]"
+        className="flex h-9 select-none items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] pl-2.5 pr-2 text-sm font-medium text-white/90 transition active:scale-95 hover:bg-white/[0.08] sm:h-10 sm:gap-2 sm:pl-3 sm:pr-2.5"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         <IconGlobe width={16} height={16} className="text-white/60" />
-        <span className="max-w-[120px] truncate">{current?.name ?? value}</span>
+        <span className="text-[13px] font-semibold tracking-wide sm:hidden">{value.toUpperCase()}</span>
+        <span className="hidden max-w-[120px] truncate sm:inline">{current?.name ?? value}</span>
         <IconChevron width={14} height={14} className={`text-white/50 transition ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-64 origin-top-right animate-fadeUp overflow-hidden rounded-2xl border border-white/10 bg-[#141414]/95 shadow-2xl backdrop-blur-xl">
+        <div className="absolute right-0 z-40 mt-2 w-[min(16rem,calc(100vw-2rem))] origin-top-right animate-fadeUp overflow-hidden rounded-2xl border border-white/10 bg-[#141414]/95 shadow-2xl backdrop-blur-xl">
           <div className="border-b border-white/[0.06] p-2">
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Translate to…"
-              className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-sm text-white placeholder:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20"
+              className="w-full rounded-xl bg-white/[0.05] px-3 py-2 text-base text-white placeholder md:text-sm:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20"
             />
           </div>
           <ul role="listbox" className="max-h-80 overflow-y-auto p-1.5">

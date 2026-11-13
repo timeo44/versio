@@ -18,14 +18,14 @@ export const MODES: { id: DisplayMode; label: string }[] = [
 
 export function ModeToggle({ value, onChange, className = "" }: { value: DisplayMode; onChange: (m: DisplayMode) => void; className?: string }) {
   return (
-    <div className={`inline-flex rounded-full border border-white/[0.08] bg-white/[0.04] p-1 ${className}`} role="radiogroup" aria-label="Lyrics display">
+    <div className={`flex rounded-full border border-white/[0.08] bg-white/[0.04] p-1 sm:inline-flex ${className}`} role="radiogroup" aria-label="Lyrics display">
       {MODES.map((m) => (
         <button
           key={m.id}
           role="radio"
           aria-checked={value === m.id}
           onClick={() => onChange(m.id)}
-          className={`rounded-full px-3.5 py-1.5 text-[13px] font-medium transition ${value === m.id ? "bg-white text-black" : "text-white/60 hover:text-white"}`}
+          className={`flex-1 select-none rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors sm:flex-none ${value === m.id ? "bg-white text-black" : "text-white/60 active:text-white hover:text-white"}`}
         >
           {m.label}
         </button>

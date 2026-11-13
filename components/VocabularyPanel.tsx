@@ -53,7 +53,7 @@ export function VocabularyPanel({ open, onClose, items, onRemove, syncing, syncE
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search words, songs…"
-            className="mb-4 w-full rounded-xl bg-white/[0.05] px-3.5 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20"
+            className="mb-4 w-full rounded-xl bg-white/[0.05] px-3.5 py-2.5 text-base text-white placeholder md:text-sm:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20"
           />
           <ul className="space-y-2.5">
             {filtered.map((e) => (

@@ -22,7 +22,7 @@ interface Props {
 }
 
 /** Where the active line sits in the viewport (fraction from top). */
-const FOCUS = 0.36;
+const FOCUS = 0.34;
 
 export function LyricsView(p: Props) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -85,7 +85,7 @@ export function LyricsView(p: Props) {
         className="lyrics-mask h-full overflow-y-auto overscroll-contain px-1 focus:outline-hidden"
         style={{ scrollbarWidth: "none" }}
       >
-        <div className={p.synced ? "pb-[60vh] pt-[30vh]" : "pb-24 pt-6"}>
+        <div className={p.synced ? "pb-[60vh] pt-[24vh] md:pt-[30vh]" : "pb-[calc(6rem+env(safe-area-inset-bottom))] pt-4"}>
           {p.lines.map((line, i) => (
             <Line
               key={`${p.trackKey}-${line.id}`}
@@ -114,7 +114,7 @@ export function LyricsView(p: Props) {
             setFollow(true);
             scrollToActive(true);
           }}
-          className="absolute bottom-6 left-1/2 flex -translate-x-1/2 animate-fadeUp items-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black shadow-xl transition hover:scale-105"
+          className="absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-1/2 flex -translate-x-1/2 animate-fadeUp select-none items-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-black shadow-xl transition active:scale-95"
         >
           <IconArrowDown width={15} height={15} /> Follow live
         </button>
@@ -174,7 +174,7 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
       role="button"
       tabIndex={-1}
       onClick={onSelect}
-      className="group cursor-pointer origin-left rounded-2xl py-3 transition-[opacity,transform,filter] duration-700 ease-glide hover:!opacity-90 md:py-4"
+      className="group cursor-pointer select-none origin-left rounded-2xl py-2.5 transition-[opacity,transform,filter] duration-700 ease-glide hover:!opacity-90 md:py-4"
       style={{ opacity, transform: `scale(${scale})`, filter: blur ? `blur(${blur}px)` : undefined }}
       aria-current={active ? "true" : undefined}
     >
@@ -182,15 +182,15 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
         <p
           dir={rtlOriginal ? "rtl" : "auto"}
           className={`text-balance text-left font-bold leading-[1.15] tracking-[-0.02em] text-white transition-colors ${
-            translationIsMain ? "" : "text-[26px] md:text-[38px] xl:text-[44px]"
-          } ${mode === "translation" ? "text-[26px] text-white/50 md:text-[38px]" : ""}`}
+            translationIsMain ? "" : "text-[24px] sm:text-[28px] md:text-[38px] xl:text-[44px]"
+          } ${mode === "translation" ? "text-[24px] text-white/50 sm:text-[28px] md:text-[38px]" : ""}`}
         >
           {line.text}
         </p>
       )}
 
       {showOriginal && pronunciation && (
-        <p dir="ltr" className="mt-1 text-[15px] font-normal leading-snug tracking-[0.01em] text-white/55 md:text-[18px]">
+        <p dir="ltr" className="mt-1 text-[14px] font-normal leading-snug tracking-[0.01em] text-white/55 sm:text-[15px] md:text-[18px]">
           {pronunciation}
         </p>
       )}
@@ -202,8 +202,8 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
               dir={rtlTranslation ? "rtl" : "auto"}
               className={
                 translationIsMain
-                  ? "text-balance text-[26px] font-bold leading-[1.15] tracking-[-0.02em] text-white md:text-[38px] xl:text-[44px]"
-                  : "text-balance text-[19px] font-medium leading-snug tracking-[-0.01em] text-[color:var(--accent-text)] md:text-[24px] xl:text-[27px]"
+                  ? "text-balance text-[24px] font-bold leading-[1.15] tracking-[-0.02em] text-white sm:text-[28px] md:text-[38px] xl:text-[44px]"
+                  : "text-balance text-[17px] font-medium leading-snug tracking-[-0.01em] text-[color:var(--accent-text)] sm:text-[19px] md:text-[24px] xl:text-[27px]"
               }
             >
               {translation}

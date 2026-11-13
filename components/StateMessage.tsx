@@ -27,10 +27,10 @@ export function Banner({ tone = "neutral", children, action }: { tone?: "neutral
 
 export const btn = {
   primary:
-    "inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:scale-[1.03] active:scale-[0.98]",
+    "inline-flex select-none items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition active:scale-[0.97] active:bg-white/85 hover:bg-white/90",
   ghost:
-    "inline-flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/[0.08] hover:text-white",
+    "inline-flex select-none items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/85 transition active:scale-[0.97] active:bg-white/[0.12] hover:bg-white/[0.08] hover:text-white",
   spotify:
-    "inline-flex items-center justify-center gap-2.5 rounded-full bg-spotify px-7 py-3.5 text-[15px] font-semibold text-black shadow-[0_10px_40px_-10px_rgba(30,215,96,0.6)] transition hover:scale-[1.03] hover:bg-[#3be477] active:scale-[0.98]",
-  icon: "grid h-10 w-10 place-items-center rounded-full text-white/65 transition hover:bg-white/[0.08] hover:text-white",
+    "inline-flex select-none items-center justify-center gap-2.5 rounded-full bg-spotify px-7 py-3.5 text-[15px] font-semibold text-black shadow-[0_10px_40px_-10px_rgba(30,215,96,0.6)] transition hover:bg-[#3be477] active:scale-[0.97]",
+  icon: "grid h-10 w-10 select-none place-items-center rounded-full text-white/65 transition active:scale-90 active:bg-white/[0.12] hover:bg-white/[0.08] hover:text-white",
 };

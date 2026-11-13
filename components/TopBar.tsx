@@ -34,7 +34,7 @@ export function TopBar({
 }) {
   const s = STATUS[status];
   return (
-    <header className="relative z-30 flex h-[calc(4rem+env(safe-area-inset-top))] items-center pt-[env(safe-area-inset-top)] justify-between gap-3 px-4 md:px-8">
+    <header className="relative z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-2 px-3 pt-[env(safe-area-inset-top)] sm:h-[calc(4rem+env(safe-area-inset-top))] sm:gap-3 sm:px-4 md:px-8">
       <div className="flex items-center gap-2.5">
         <Logo />
         <span className="hidden text-[15px] font-semibold tracking-tight text-white sm:inline">Versio</span>
@@ -43,7 +43,7 @@ export function TopBar({
           Spotify · {s.label}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-0.5 sm:gap-1.5">
         <span className={`mr-1 h-2 w-2 rounded-full md:hidden ${s.dot}`} title={`Spotify · ${s.label}`} />
         <LanguageSelect value={targetLang} onChange={onLang} provider={provider} />
         <button className={`${btn.icon} relative`} onClick={onVocab} aria-label="Vocabulary">

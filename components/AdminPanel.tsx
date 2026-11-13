@@ -182,7 +182,7 @@ export function AdminPanel({ open, onClose, me }: { open: boolean; onClose: () =
 }
 
 const input =
-  "w-full rounded-xl bg-white/[0.05] px-3.5 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20";
+  "w-full rounded-xl bg-white/[0.05] px-3.5 py-2.5 text-base text-white placeholder md:text-sm:text-white/35 focus:outline-hidden focus:ring-1 focus:ring-white/20";
 
 function Step({ n }: { n: number }) {
   return <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/15 text-[10px] font-bold text-white">{n}</span>;

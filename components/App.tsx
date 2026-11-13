@@ -229,7 +229,7 @@ function Player({ onExpired, access, reloadAccess }: { onExpired: (msg: string) 
         onSettings={() => setPanel("settings")}
       />
 
-      <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col gap-4 px-4 md:px-8 lg:grid lg:grid-cols-[minmax(300px,400px)_1fr] lg:gap-16 xl:gap-24">
+      <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col gap-3 px-4 sm:gap-4 md:px-8 lg:grid lg:grid-cols-[minmax(300px,400px)_1fr] lg:gap-16 xl:gap-24">
         {!track ? (
           <div className="lg:col-span-2">
             <EmptyPlayback playback={playback} />
@@ -241,9 +241,9 @@ function Player({ onExpired, access, reloadAccess }: { onExpired: (msg: string) 
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-2 lg:pt-6">
-                <ModeToggle value={settings.displayMode} onChange={(displayMode) => update({ displayMode })} />
-                <div className="flex items-center gap-2 text-[12px] text-white/45">
+              <div className="flex flex-col gap-2 pb-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:pb-2 lg:pt-6">
+                <ModeToggle className="w-full sm:w-auto" value={settings.displayMode} onChange={(displayMode) => update({ displayMode })} />
+                <div className="flex items-center gap-2 px-1 text-[12px] text-white/45 empty:hidden">
                   {tr.status === "loading" && (
                     <span className="inline-flex items-center gap-2">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--accent-text)]" />
