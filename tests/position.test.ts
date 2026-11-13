@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { positionAt, reconcileAnchor, type Anchor } from "../lib/playback/position";
+import { calibrateOffset, positionAt, reconcileAnchor, MAX_OFFSET_MS, type Anchor } from "../lib/playback/position";
 
 const a: Anchor = { progressMs: 10_000, at: 1000, isPlaying: true, durationMs: 200_000 };
 
@@ -24,4 +24,15 @@ test("reconcile keeps anchor for small jitter, resets on seeks", () => {
   assert.equal(reconcileAnchor(a, jitter, false).progressMs, jitter.progressMs);
   const paused: Anchor = { ...jitter, isPlaying: false };
   assert.equal(reconcileAnchor(a, paused, true), paused);
+});
+
+test("calibration makes the tapped line active now", () => {
+  // song is at 10.5 s; user says the line starting at 12 s is being sung
+  const off = calibrateOffset(a, 1500, 12_000);
+  assert.equal(off, 1650);
+  assert.ok(positionAt(a, 1500, off) >= 12_000);
+  // line already passed → negative offset (lyrics later)
+  assert.equal(calibrateOffset(a, 1500, 9_000, 0), -1500);
+  // clamps absurd jumps
+  assert.equal(calibrateOffset(a, 1500, 120_000), MAX_OFFSET_MS);
 });

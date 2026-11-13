@@ -71,7 +71,7 @@ export function ConnectScreen({ notice }: { notice?: string }) {
 
         <ul className="mx-auto mt-14 grid max-w-lg grid-cols-1 gap-3 text-left text-[13px] text-white/50 sm:grid-cols-3">
           {[
-            ["Read-only", "Only sees what's playing. Can't control or change anything."],
+            ["Private", "Sees what's playing and lets you play, pause and skip. Nothing else."],
             ["Synced", "Line-accurate LRC timing — never faked."],
             ["Natural", "Slang and idioms translated like a native would."],
           ].map(([t, d]) => (

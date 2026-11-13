@@ -9,6 +9,8 @@ import { IconSpotify } from "./icons";
 import { btn } from "./StateMessage";
 import { IconChevron } from "./icons";
 import type { AccessInfo } from "@/lib/access/types";
+import type { DeviceInfo } from "@/hooks/usePlayback";
+import { IconMic, IconTap, IconTrash } from "./icons";
 
 export const MODES: { id: DisplayMode; label: string }[] = [
   { id: "both", label: "Both" },
@@ -44,6 +46,13 @@ export function SettingsPanel({
   onOpenAdmin,
   onOpen,
   onDisconnect,
+  canCalibrate,
+  onCalibrate,
+  onListen,
+  device,
+  offsetMs,
+  setOffset,
+  removeDevice,
 }: {
   open: boolean;
   onClose: () => void;
@@ -54,6 +63,14 @@ export function SettingsPanel({
   onOpenAdmin: () => void;
   onOpen: () => void;
   onDisconnect: () => void;
+  canCalibrate: boolean;
+  onCalibrate: () => void;
+  /** undefined when listening isn't available (no OpenAI key / no mic API) */
+  onListen?: () => void;
+  device?: DeviceInfo;
+  offsetMs: number;
+  setOffset: (ms: number) => void;
+  removeDevice: (key: string) => void;
 }) {
   useEffect(() => {
     if (open) onOpen();
@@ -63,6 +80,8 @@ export function SettingsPanel({
   useEffect(() => {
     if (open && !me) getMe().then(setMe).catch(() => {});
   }, [open, me]);
+
+  const savedDevices = Object.entries(settings.deviceOffsets).sort((a, b) => b[1].updatedAt - a[1].updatedAt);
 
   const providerLabel = config?.provider === "openai" ? "OpenAI (context-aware)" : config?.provider === "deepl" ? "DeepL" : "Not configured";
 
@@ -115,31 +134,85 @@ export function SettingsPanel({
           />
         </Group>
 
-        <Group label="Timing offset" hint="Nudge lyrics if they feel early or late on your device (e.g. Bluetooth latency).">
+        <Group label="Timing" hint="Saved per Spotify device — each device keeps its own timing, a new device starts at 0.">
+          <div className="mb-3 flex items-center gap-2 text-[13px] text-white/70">
+            <span className={`h-1.5 w-1.5 rounded-full ${device ? "bg-spotify" : "bg-white/25"}`} />
+            {device ? (
+              <span className="min-w-0 truncate">
+                Now on <span className="font-semibold text-white">{device.name}</span>
+                <span className="text-white/40"> · {device.type}</span>
+              </span>
+            ) : (
+              <span className="text-white/45">No active Spotify device</span>
+            )}
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <CalibrateButton
+              icon={<IconTap width={18} height={18} />}
+              title="Tap to sync"
+              text={canCalibrate ? "Tap a line the moment it's sung." : "Play a song with synced lyrics first."}
+              onClick={onCalibrate}
+              disabled={!canCalibrate}
+            />
+            {onListen && (
+              <CalibrateButton
+                icon={<IconMic width={18} height={18} />}
+                title="Listen to sync"
+                text={canCalibrate ? "Hears the song through the mic (speaker, not headphones)." : "Play a song with synced lyrics first."}
+                onClick={onListen}
+                disabled={!canCalibrate}
+              />
+            )}
+          </div>
+
           <div className="flex items-center gap-3">
-            <button className={btn.icon} onClick={() => update({ offsetMs: settings.offsetMs - 100 })} aria-label="Lyrics later">−</button>
+            <button className={btn.icon} onClick={() => setOffset(offsetMs - 100)} disabled={!device} aria-label="Lyrics later">−</button>
             <input
               type="range"
-              min={-2000}
-              max={2000}
+              min={-Math.max(2000, Math.abs(offsetMs))}
+              max={Math.max(2000, Math.abs(offsetMs))}
               step={50}
-              value={settings.offsetMs}
-              onChange={(e) => update({ offsetMs: Number(e.target.value) })}
-              className="flex-1 accent-white"
+              value={offsetMs}
+              disabled={!device}
+              onChange={(e) => setOffset(Number(e.target.value))}
+              className="flex-1 accent-white disabled:opacity-40"
               aria-label="Timing offset"
             />
-            <button className={btn.icon} onClick={() => update({ offsetMs: settings.offsetMs + 100 })} aria-label="Lyrics earlier">+</button>
+            <button className={btn.icon} onClick={() => setOffset(offsetMs + 100)} disabled={!device} aria-label="Lyrics earlier">+</button>
           </div>
           <div className="mt-1 flex items-center justify-between text-[12px] text-white/45">
-            <span className="tabular-nums">
-              {settings.offsetMs === 0 ? "No offset" : `${settings.offsetMs > 0 ? "+" : ""}${(settings.offsetMs / 1000).toFixed(2)} s ${settings.offsetMs > 0 ? "(earlier)" : "(later)"}`}
-            </span>
-            {settings.offsetMs !== 0 && (
-              <button className="text-white/60 underline-offset-2 hover:underline" onClick={() => update({ offsetMs: 0 })}>
+            <span className="tabular-nums">{formatOffsetLabel(offsetMs)}</span>
+            {device && offsetMs !== 0 && (
+              <button className="text-white/60 underline-offset-2 hover:underline" onClick={() => setOffset(0)}>
                 Reset
               </button>
             )}
           </div>
+
+          {savedDevices.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2 text-[12px] font-medium text-white/45">Saved devices</p>
+              <ul className="divide-y divide-white/[0.05] rounded-2xl border border-white/[0.06] bg-white/[0.02] text-sm">
+                {savedDevices.map(([key, d]) => (
+                  <li key={key} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-white/85">
+                        {d.name}
+                        {device?.key === key && <span className="ml-2 rounded-full bg-spotify/15 px-2 py-0.5 text-[10px] font-semibold text-spotify">Now</span>}
+                      </p>
+                      <p className="text-[12px] tabular-nums text-white/40">
+                        {d.type} · {formatOffsetLabel(d.offsetMs)}
+                      </p>
+                    </div>
+                    <button className={btn.icon} onClick={() => removeDevice(key)} aria-label={`Forget ${d.name}`}>
+                      <IconTrash width={16} height={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Group>
 
         <Group label="Services">
@@ -157,7 +230,7 @@ export function SettingsPanel({
               <IconSpotify className="shrink-0 text-spotify" width={28} height={28} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{me?.display_name || me?.id || "Connected"}</p>
-                <p className="text-[12px] text-white/40">Read-only playback access</p>
+                <p className="text-[12px] text-white/40">Playback info and controls</p>
               </div>
             </div>
             <button className={btn.ghost} onClick={onDisconnect}>
@@ -171,6 +244,27 @@ export function SettingsPanel({
         </p>
       </div>
     </Sheet>
+  );
+}
+
+function formatOffsetLabel(ms: number) {
+  if (ms === 0) return "No offset";
+  return `${ms > 0 ? "+" : "−"}${(Math.abs(ms) / 1000).toFixed(2)} s ${ms > 0 ? "(lyrics earlier)" : "(lyrics later)"}`;
+}
+
+function CalibrateButton({ icon, title, text, onClick, disabled }: { icon: React.ReactNode; title: string; text: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex items-start gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5 text-left transition hover:bg-white/[0.07] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/[0.08] text-white">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-white">{title}</span>
+        <span className="mt-0.5 block text-[12px] leading-snug text-white/45">{text}</span>
+      </span>
+    </button>
   );
 }
 

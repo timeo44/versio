@@ -11,6 +11,7 @@
  *   POST /translate    { lines, target, context }
  *   POST /explain      { line, target, … }
  *   POST /romanize     { lines, context }
+ *   POST /transcribe   { audio (base64), mime, title?, artist? } → words with timestamps
  *   GET|POST|DELETE /vocabulary
  *   GET|POST /admin    (admins only)
  */
@@ -35,6 +36,7 @@ import { TranslationUnavailableError, activeProvider, explainLine, explanationsA
 import { rest, supabaseEnabled } from "./supabase";
 import { getCredits, setCreditBalance } from "./credits";
 import { checkSpend, monitorKeyValid } from "./monitor";
+import { MAX_CLIP_BYTES, clipExtension, transcribeClip, transcriptionAvailable } from "./transcribe";
 import { getLanguage } from "@/lib/languages";
 import type { ExplainRequest, TranslateRequest } from "@/lib/translation/types";
 import type { VocabEntry } from "@/lib/vocabulary/types";
@@ -76,7 +78,7 @@ async function route(req: Request, path: string): Promise<Response> {
   const m = req.method;
 
   if (m === "GET" && path === "/config") {
-    return json({ provider: activeProvider(), explanations: explanationsAvailable(), pronunciation: romanizationAvailable(), vocabularySync: supabaseEnabled() });
+    return json({ provider: activeProvider(), explanations: explanationsAvailable(), pronunciation: romanizationAvailable(), listen: transcriptionAvailable(), vocabularySync: supabaseEnabled() });
   }
 
   if (path === "/me") {
@@ -134,6 +136,25 @@ async function route(req: Request, path: string): Promise<Response> {
     if (!lines.length || lines.length > 80) return json({ error: "Send 1–80 lines per request." }, 400);
     const romanizations = await romanizeLines(lines, { title: s(b?.context?.title, 200), artist: s(b?.context?.artist, 200), lyrics: s(b?.context?.lyrics, 20_000) }, (n) => consumeQuota(user, "translate", n));
     return json({ romanizations });
+  }
+
+  if (m === "POST" && path === "/transcribe") {
+    const user = await authenticate(req);
+    const b = await body<{ audio?: unknown; mime?: unknown; title?: unknown; artist?: unknown }>(req);
+    const mime = s(b?.mime, 100) ?? "";
+    if (typeof b?.audio !== "string" || !clipExtension(mime)) return json({ error: "audio (base64) and a supported mime type are required" }, 400);
+    let audio: Uint8Array<ArrayBuffer>;
+    try {
+      const bin = atob(b.audio);
+      audio = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    } catch {
+      return json({ error: "audio must be base64" }, 400);
+    }
+    if (!audio.length || audio.length > MAX_CLIP_BYTES) return json({ error: "Audio clip is empty or too long." }, 400);
+    await consumeQuota(user, "explain", 1);
+    const title = s(b?.title, 200);
+    const artist = s(b?.artist, 200);
+    return json(await transcribeClip(audio, mime, title ? `Song lyrics: "${title}"${artist ? ` by ${artist}` : ""}.` : undefined));
   }
 
   if (path === "/vocabulary") return vocabulary(req);

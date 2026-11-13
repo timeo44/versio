@@ -72,6 +72,32 @@ export const IconPause = (p: SVGProps<SVGSVGElement>) => (
     <rect x="14" y="5" width="4" height="14" rx="1" />
   </svg>
 );
+export const IconPlay = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path d="M7.5 4.6v14.8a1 1 0 001.5.86l12.2-7.4a1 1 0 000-1.72L9 3.74a1 1 0 00-1.5.86z" />
+  </svg>
+);
+export const IconNext = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path d="M3 6.2v11.6a.8.8 0 001.24.67L12 13.2v4.6a.8.8 0 001.24.67l8.4-5.8a.8.8 0 000-1.34l-8.4-5.8A.8.8 0 0012 6.2v4.6L4.24 5.53A.8.8 0 003 6.2z" />
+  </svg>
+);
+export const IconPrevious = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} fill="currentColor" stroke="none" style={{ transform: "scaleX(-1)", ...p.style }}>
+    <path d="M3 6.2v11.6a.8.8 0 001.24.67L12 13.2v4.6a.8.8 0 001.24.67l8.4-5.8a.8.8 0 000-1.34l-8.4-5.8A.8.8 0 0012 6.2v4.6L4.24 5.53A.8.8 0 003 6.2z" />
+  </svg>
+);
+export const IconMic = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0014 0M12 18v3" />
+  </svg>
+);
+export const IconTap = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M9 11V5.5a1.5 1.5 0 013 0V11m0-1.5a1.5 1.5 0 013 0V12m0-1a1.5 1.5 0 013 0v4a6 6 0 01-6 6h-.5a6 6 0 01-4.6-2.2L4.6 15.6a1.5 1.5 0 012.3-1.9L9 16" />
+  </svg>
+);
 export const IconSpotify = ({ wave = "#090909", ...p }: SVGProps<SVGSVGElement> & { wave?: string }) => (
   <svg width={20} height={20} viewBox="0 0 24 24" aria-hidden {...p}>
     <circle cx="12" cy="12" r="11" fill="currentColor" />

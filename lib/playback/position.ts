@@ -26,3 +26,18 @@ export function reconcileAnchor(prev: Anchor | null, next: Anchor, sameTrack: bo
   const predicted = positionAt(prev, next.at);
   return Math.abs(predicted - next.progressMs) <= toleranceMs ? { ...prev, durationMs: next.durationMs } : next;
 }
+
+/** Largest offset calibration may set (a different LRC version can be several seconds off). */
+export const MAX_OFFSET_MS = 15000;
+
+/**
+ * Offset that makes `lineTimeMs` start right now — used when the user taps a
+ * line the moment it starts being sung ("calibrate"). `reactionMs` accounts
+ * for the human delay between hearing the line and tapping it, so the line
+ * actually began that much earlier.
+ */
+export function calibrateOffset(a: Anchor | null, now: number, lineTimeMs: number, reactionMs = 150): number {
+  const raw = lineTimeMs - positionAt(a, now, 0) + reactionMs;
+  const rounded = Math.round(raw / 10) * 10;
+  return Math.max(-MAX_OFFSET_MS, Math.min(MAX_OFFSET_MS, rounded));
+}

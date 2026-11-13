@@ -18,7 +18,12 @@ interface Props {
   mode: DisplayMode;
   targetLang: string;
   sourceLang: string | null;
+  /** tap on a line: seek there, or re-sync while calibrating */
   onSelect: (index: number) => void;
+  /** open the explanation for a line (right-click on desktop, long-press on touch) */
+  onExplain: (index: number) => void;
+  /** tap-to-sync mode: lines stay readable and a tap re-syncs instead of explaining */
+  calibrating?: boolean;
 }
 
 /** Where the active line sits in the viewport (fraction from top). */
@@ -58,6 +63,14 @@ export function LyricsView(p: Props) {
     if (p.synced && follow) scrollToActive(false);
   }, [p.mode, p.showTranslation]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // entering calibration → jump back to the live line and keep following
+  useEffect(() => {
+    if (p.calibrating) {
+      setFollow(true);
+      scrollToActive(true);
+    }
+  }, [p.calibrating]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Any user-initiated scroll releases "follow"
   useEffect(() => {
     const box = scroller.current;
@@ -95,7 +108,8 @@ export function LyricsView(p: Props) {
               line={line}
               distance={p.synced && p.activeIndex >= 0 ? i - p.activeIndex : p.synced ? i + 1 : 0}
               synced={p.synced}
-              browsing={!follow}
+              browsing={!follow || !!p.calibrating}
+              calibrating={!!p.calibrating}
               translation={p.showTranslation ? p.translations[line.text.trim()] : undefined}
               pronunciation={p.pronunciations?.[line.text.trim()]}
               pending={p.showTranslation && p.translating && !!line.text.trim() && !(line.text.trim() in p.translations)}
@@ -103,6 +117,7 @@ export function LyricsView(p: Props) {
               rtlOriginal={rtlOriginal}
               rtlTranslation={rtlTranslation}
               onSelect={() => p.onSelect(i)}
+              onExplain={() => p.onExplain(i)}
             />
           ))}
         </div>
@@ -135,13 +150,16 @@ interface LineProps {
   rtlOriginal: boolean;
   rtlTranslation: boolean;
   onSelect: () => void;
+  onExplain: () => void;
+  calibrating: boolean;
   ref?: React.Ref<HTMLDivElement>;
 }
 
-const Line = memo(function Line({ line, distance, synced, browsing, translation, pronunciation, pending, mode, rtlOriginal, rtlTranslation, onSelect, ref }: LineProps) {
+const Line = memo(function Line({ line, distance, synced, browsing, translation, pronunciation, pending, mode, rtlOriginal, rtlTranslation, onSelect, onExplain, calibrating, ref }: LineProps) {
   const active = synced && distance === 0;
   const near = synced && Math.abs(distance) === 1;
   const isGap = !line.text.trim();
+  const press = useRef<{ timer: number; fired: boolean; x: number; y: number } | null>(null);
 
   // three levels: current (bright), neighbours (muted), rest (faint)
   let opacity = 1;
@@ -164,6 +182,48 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
     );
   }
 
+  // right-click (laptop) or long-press (phone) opens the explanation; a normal tap seeks
+  const clearPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+  };
+  const pressHandlers = calibrating
+    ? {}
+    : {
+        onPointerDown: (e: React.PointerEvent) => {
+          clearPress();
+          press.current = null;
+          if (e.pointerType === "mouse") return;
+          const state = { fired: false, x: e.clientX, y: e.clientY, timer: 0 };
+          state.timer = window.setTimeout(() => {
+            state.fired = true;
+            onExplain();
+          }, 500);
+          press.current = state;
+        },
+        onPointerMove: (e: React.PointerEvent) => {
+          const st = press.current;
+          if (st && !st.fired && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) clearPress();
+        },
+        onPointerUp: clearPress,
+        onPointerCancel: clearPress,
+        onContextMenu: (e: React.MouseEvent) => {
+          e.preventDefault();
+          const already = !!press.current?.fired;
+          clearPress();
+          // swallow the click some browsers send after a long-press
+          press.current = { timer: 0, fired: true, x: 0, y: 0 };
+          if (!already) onExplain();
+        },
+      };
+  const handleClick = () => {
+    if (press.current?.fired) {
+      press.current = null;
+      return; // the long-press already opened the explanation
+    }
+    press.current = null;
+    onSelect();
+  };
+
   const showOriginal = mode !== "translation" || !translation;
   const showTranslation = mode !== "original";
   const translationIsMain = mode === "translation" && !!translation;
@@ -173,10 +233,14 @@ const Line = memo(function Line({ line, distance, synced, browsing, translation,
       ref={ref}
       role="button"
       tabIndex={-1}
-      onClick={onSelect}
-      className="group cursor-pointer select-none origin-left rounded-2xl py-2.5 transition-[opacity,transform,filter] duration-700 ease-glide hover:!opacity-90 md:py-4"
+      onClick={handleClick}
+      {...pressHandlers}
+      className={`group relative cursor-pointer [-webkit-touch-callout:none] select-none origin-left rounded-2xl py-2.5 transition-[opacity,transform,filter,background-color] duration-700 ease-glide hover:!opacity-90 md:py-4 ${
+        calibrating ? "-mx-2 px-2 hover:bg-white/[0.06] active:bg-white/[0.12]" : ""
+      }`}
       style={{ opacity, transform: `scale(${scale})`, filter: blur ? `blur(${blur}px)` : undefined }}
       aria-current={active ? "true" : undefined}
+      aria-label={calibrating ? `Sync to: ${line.text}` : undefined}
     >
       {showOriginal && (
         <p

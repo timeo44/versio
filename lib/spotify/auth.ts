@@ -47,6 +47,11 @@ export function hasSession(): boolean {
   return !!read()?.refreshToken;
 }
 
+/** Whether the stored Spotify session was granted `scope`. */
+export function hasScope(scope: string): boolean {
+  return (read()?.scope ?? "").split(/\s+/).includes(scope);
+}
+
 export function logout() {
   write(null);
 }

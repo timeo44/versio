@@ -27,11 +27,21 @@ export interface TrackInfo {
   spotifyUrl?: string;
 }
 
+/** The Spotify device that is playing. `key` identifies it across sessions. */
+export interface DeviceInfo {
+  key: string;
+  name: string;
+  type: string;
+  /** Spotify says this device can't be controlled remotely */
+  restricted: boolean;
+}
+
 export interface Playback {
   status: PlaybackStatus;
   track: TrackInfo | null;
   anchor: Anchor | null;
   deviceName?: string;
+  device?: DeviceInfo;
   message?: string;
   rateLimitedUntil?: number;
   lastUpdated?: number;
@@ -60,12 +70,33 @@ function mapTrack(d: PlaybackStateResponse): TrackInfo | null {
   };
 }
 
-export function usePlayback(enabled: boolean): Playback & { refresh: () => void } {
+/**
+ * Spotify web-player ids change every session, so the device is keyed by its
+ * type + name ("Smartphone · Timeo's iPhone"), which stays stable.
+ */
+export function deviceKey(d: { name: string; type: string }): string {
+  return `${d.type}:${d.name}`.toLowerCase();
+}
+
+function mapDevice(d: PlaybackStateResponse["device"]): DeviceInfo | undefined {
+  if (!d?.name) return undefined;
+  return { key: deviceKey(d), name: d.name, type: d.type, restricted: !!d.is_restricted };
+}
+
+export type PlaybackApi = Playback & {
+  refresh: () => void;
+  /** Apply an optimistic change after a player command; polls that started earlier are ignored. */
+  optimistic: (patch: (p: Playback) => Playback) => void;
+};
+
+export function usePlayback(enabled: boolean): PlaybackApi {
   const [state, setState] = useState<Playback>({ status: "connecting", track: null, anchor: null });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflight = useRef<AbortController | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  /** responses to polls started before this moment are stale (a command just changed things) */
+  const ignoreBefore = useRef(0);
 
   const poll = useCallback(async () => {
     if (timer.current) clearTimeout(timer.current);
@@ -78,6 +109,7 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
     try {
       const data = await getPlaybackState(ctrl.signal);
       const t1 = performance.now();
+      if (t0 < ignoreBefore.current) throw new StalePoll();
       // request midpoint ≈ moment the server sampled progress
       const at = (t0 + t1) / 2;
 
@@ -87,7 +119,7 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
         setState((s) => ({ ...s, status: "unsupported", message: "An ad is playing — lyrics resume with the next song.", anchor: null, lastUpdated: Date.now() }));
         next = INTERVAL_PAUSED;
       } else if (data.currently_playing_type === "episode") {
-        setState({ status: "unsupported", track: null, anchor: null, deviceName: data.device?.name, message: "Podcast episodes don't have lyrics.", lastUpdated: Date.now() });
+        setState({ status: "unsupported", track: null, anchor: null, deviceName: data.device?.name, device: mapDevice(data.device), message: "Podcast episodes don't have lyrics.", lastUpdated: Date.now() });
       } else {
         const track = mapTrack(data);
         if (!track) {
@@ -96,6 +128,7 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
             track: null,
             anchor: null,
             deviceName: data.device?.name,
+            device: mapDevice(data.device),
             message: data.device?.is_private_session ? "Spotify is in a private session — track info is hidden." : "Spotify isn't sharing track info right now.",
             lastUpdated: Date.now(),
           });
@@ -108,6 +141,7 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
               track: sameTrack && prev.track ? prev.track : track,
               anchor: reconcileAnchor(prev.anchor, anchor, sameTrack),
               deviceName: data.device?.name,
+              device: sameDevice(prev.device, mapDevice(data.device)),
               lastUpdated: Date.now(),
             };
           });
@@ -121,6 +155,10 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
       }
     } catch (e) {
       if (ctrl.signal.aborted) return;
+      if (e instanceof StalePoll) {
+        timer.current = setTimeout(poll, 300);
+        return;
+      }
       if (e instanceof AuthExpiredError) {
         setState({ status: "auth-expired", track: null, anchor: null, message: e.message });
         return; // stop polling
@@ -175,5 +213,25 @@ export function usePlayback(enabled: boolean): Playback & { refresh: () => void 
     return () => clearTimeout(t);
   }, [state.rateLimitedUntil]);
 
-  return { ...state, refresh: poll };
+  const optimistic = useCallback(
+    (patch: (p: Playback) => Playback) => {
+      ignoreBefore.current = performance.now();
+      inflight.current?.abort();
+      setState((s) => patch(s));
+      if (timer.current) clearTimeout(timer.current);
+      // give Spotify a moment to apply the command before asking again
+      timer.current = setTimeout(poll, 800);
+    },
+    [poll],
+  );
+
+  return { ...state, refresh: poll, optimistic };
+}
+
+class StalePoll extends Error {}
+
+/** Keep the same object while nothing changed, so effects keyed on the device don't re-run every poll. */
+function sameDevice(prev: DeviceInfo | undefined, next: DeviceInfo | undefined): DeviceInfo | undefined {
+  if (prev && next && prev.key === next.key && prev.restricted === next.restricted && prev.name === next.name) return prev;
+  return next;
 }

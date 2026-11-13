@@ -3,14 +3,17 @@
 Versio watches what you're playing on Spotify, finds **time-synced lyrics**, and shows a **natural translation** of every line as it's sung.
 
 - Spotify OAuth 2.0 **Authorization Code + PKCE** (no client secret anywhere)
-- Read-only scopes: `user-read-currently-playing`, `user-read-playback-state`
+- Scopes: `user-read-currently-playing`, `user-read-playback-state`, `user-modify-playback-state` (play/pause/skip/seek — needs Spotify Premium; older sessions are asked to reconnect once)
 - Synced lyrics from **LRCLIB** (LRC, line-level). Unsynced lyrics are shown in a clearly marked fallback mode — never fake timing.
 - Translation via **OpenAI** (context-aware, slang/idioms, line explanations) or **DeepL**
 - Current line first: the chunk around the line being sung is translated before the rest of the song
 - Translation caches on the server (memory) and in the browser (per song + language)
 - Line breakdowns (literal / natural / slang / cultural context / vocabulary)
 - Vocabulary list (local, optional Supabase sync, CSV export)
-- Follow-the-line auto-scroll, free manual browsing with a "Follow live" button, timing offset for Bluetooth latency
+- Follow-the-line auto-scroll, free manual browsing with a "Follow live" button
+- Mini player: tap the now-playing card for previous / play-pause / next and a seekable progress bar
+- Tap a lyric line to jump the song there; right-click (desktop) or long-press (phone) a line for its explanation
+- Timing offset **per Spotify device** (saved; a new device starts at 0). Calibrate by tapping the line being sung, or by **listening** through the mic (Whisper transcription with word timestamps, matched to the LRC)
 
 Stack: Next.js 15 (static export) · React 19 · TypeScript · Tailwind CSS 4 · Supabase Edge Functions + Postgres · GitHub Pages.
 

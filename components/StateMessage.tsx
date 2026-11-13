@@ -11,11 +11,12 @@ export function StateMessage({ icon, title, body, action, compact }: { icon?: Re
   );
 }
 
-export function Banner({ tone = "neutral", children, action }: { tone?: "neutral" | "warn" | "error"; children: ReactNode; action?: ReactNode }) {
+export function Banner({ tone = "neutral", children, action }: { tone?: "neutral" | "warn" | "error" | "accent"; children: ReactNode; action?: ReactNode }) {
   const tones = {
     neutral: "border-white/10 bg-white/[0.04] text-white/70",
     warn: "border-amber-300/20 bg-amber-300/[0.07] text-amber-100/90",
     error: "border-rose-400/20 bg-rose-400/[0.08] text-rose-100/90",
+    accent: "border-[color:var(--accent-text)]/30 bg-white/[0.07] text-white/90",
   };
   return (
     <div className={`flex animate-fadeUp items-center justify-between gap-3 rounded-2xl border px-4 py-2.5 text-[13px] ${tones[tone]}`}>

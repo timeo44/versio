@@ -8,6 +8,8 @@ export interface AppConfig {
   provider: ProviderName;
   explanations: boolean;
   pronunciation: boolean;
+  /** speech-to-text available for "listen to calibrate" */
+  listen?: boolean;
   vocabularySync: boolean;
 }
 
