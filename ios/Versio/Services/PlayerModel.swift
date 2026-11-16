@@ -23,6 +23,10 @@ final class PlayerModel {
     var phase: Phase = .loading
     var track: SpotifyTrack?
     var deviceName: String?
+    var deviceType: String?
+    var deviceRestricted = false
+    /// transient error from play/pause/skip/seek
+    var controlError: String?
     var artwork: UIImage?
     var accent: Color = Color(white: 0.25)
     var accentText: Color = Color(white: 0.85)
@@ -45,7 +49,9 @@ final class PlayerModel {
     // settings (set by the views from @AppStorage)
     var target = "de"
     var showPronunciation = false
-    var offsetMs: Double = 0
+    /// timing offset of the current Spotify device (+ = lyrics earlier)
+    private(set) var offsetMs: Double = 0
+    var deviceKey: String { DeviceOffsets.key(name: deviceName ?? "unknown", type: deviceType) }
 
     // clock anchor
     @ObservationIgnored private var progressMs: Double = 0
@@ -81,6 +87,15 @@ final class PlayerModel {
         if config == nil {
             Task { [weak self] in self?.config = try? await VersioAPI.config() }
         }
+    }
+
+    /// Poll again right away (after a command), restarting the loop.
+    private func pollNow() {
+        pollTask?.cancel()
+        pollTask = nil
+        tickTask?.cancel()
+        tickTask = nil
+        start()
     }
 
     func stop() {
@@ -127,12 +142,22 @@ final class PlayerModel {
         let t0 = Date()
         do {
             guard let s = try await SpotifyAPI.playbackState() else {
+                // Spotify drops the player a while after pausing — keep showing the song
+                if track != nil, !isPlaying {
+                    phase = .paused
+                    return 5
+                }
                 setIdle("Nothing is playing on Spotify right now.")
                 return 5
             }
             let sampledAt = t0.addingTimeInterval(Date().timeIntervalSince(t0) / 2)
             rateLimited = false
-            deviceName = s.device?.name
+            if s.device?.name != deviceName || s.device?.type != deviceType {
+                deviceName = s.device?.name
+                deviceType = s.device?.type
+                offsetMs = DeviceOffsets.offset(for: deviceKey)
+            }
+            deviceRestricted = s.device?.isRestricted == true
 
             if s.currentlyPlayingType == "ad" {
                 phase = .idle("An ad is playing — lyrics resume with the next song.")
@@ -210,6 +235,105 @@ final class PlayerModel {
         sourceLanguage = nil
         translationError = nil
         translating = false
+    }
+
+    // MARK: Controls
+
+    func togglePlay() {
+        if isPlaying { pause() } else { play() }
+    }
+
+    func play() {
+        command({ try await SpotifyAPI.play() }, optimistic: {
+            self.progressMs = self.position(at: Date(), includeOffset: false)
+            self.anchor = Date()
+            self.isPlaying = true
+            self.phase = .playing
+        })
+    }
+
+    func pause() {
+        command({ try await SpotifyAPI.pause() }, optimistic: {
+            self.progressMs = self.position(at: Date(), includeOffset: false)
+            self.anchor = Date()
+            self.isPlaying = false
+            self.phase = .paused
+        })
+    }
+
+    func next() { command({ try await SpotifyAPI.next() }, optimistic: {}) }
+    func previous() { command({ try await SpotifyAPI.previous() }, optimistic: {}) }
+
+    /// Seek to a song position (ms, without offset).
+    func seek(toMs ms: Double) {
+        let target = max(0, min(ms, Double(track?.durationMs ?? 0)))
+        command({ try await SpotifyAPI.seek(toMs: Int(target)) }, optimistic: {
+            self.progressMs = target
+            self.anchor = Date()
+        })
+    }
+
+    /// Jump to a lyric line (synced lyrics only), slightly early so it's heard from the start.
+    func seek(toLine index: Int) {
+        guard synced, lines.indices.contains(index), let t = lines[index].timeMs else { return }
+        seek(toMs: Double(t) - offsetMs - 250)
+        activeIndex = index
+    }
+
+    private func command(_ op: @escaping () async throws -> Void, optimistic: @escaping () -> Void) {
+        controlError = nil
+        optimistic()
+        Task { [weak self] in
+            do {
+                try await op()
+                try? await Task.sleep(for: .milliseconds(350))
+                self?.pollNow()
+            } catch {
+                let message = error.localizedDescription
+                self?.controlError = message
+                self?.pollNow()
+                try? await Task.sleep(for: .seconds(4))
+                if self?.controlError == message { self?.controlError = nil }
+            }
+        }
+    }
+
+    // MARK: Timing offset
+
+    func setOffset(_ ms: Double) {
+        let clamped = min(DeviceOffsets.maxOffsetMs, max(-DeviceOffsets.maxOffsetMs, (ms / 10).rounded() * 10))
+        offsetMs = clamped
+        DeviceOffsets.set(clamped, key: deviceKey, name: deviceName ?? "This device", type: deviceType)
+    }
+
+    /// Re-read the offset after the saved-devices list changed in Settings.
+    func reloadOffset() {
+        offsetMs = DeviceOffsets.offset(for: deviceKey)
+    }
+
+    /// The user tapped the moment line `index` started being sung (150 ms reaction time).
+    func calibrate(tappedLine index: Int, at date: Date) {
+        guard lines.indices.contains(index), let t = lines[index].timeMs else { return }
+        setOffset(Double(t) - position(at: date, includeOffset: false) + 150)
+    }
+
+    /// Listens through the microphone and aligns what was heard with the lyrics.
+    func calibrateByListening(recorder: ListenRecorder) async throws -> (offsetMs: Double, matched: Int) {
+        guard let track, synced else { throw CalibrationError.nothingMatched }
+        let clip = try await recorder.record()
+        let result = try await VersioAPI.transcribe(audio: clip.data, mime: "audio/mp4", title: track.name, artist: track.artistLine)
+        let start = clip.startedAt
+        let positions = result.words.map { position(at: start.addingTimeInterval($0.start), includeOffset: false) }
+        var lookup: [Double: Double] = [:]
+        for (w, p) in zip(result.words, positions) { lookup[w.start] = p }
+        guard let aligned = LyricAligner.align(
+            lines: lines,
+            heard: result.words,
+            songMsAt: { sec in lookup[sec] ?? 0 },
+            currentOffsetMs: offsetMs
+        ) else { throw CalibrationError.nothingMatched }
+        setOffset(aligned.offsetMs)
+        return (offsetMs, aligned.matches.count)
     }
 
     // MARK: Track change

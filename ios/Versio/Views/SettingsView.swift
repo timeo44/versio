@@ -9,7 +9,8 @@ struct SettingsView: View {
     @AppStorage("targetLang") private var targetLang = "de"
     @AppStorage("displayMode") private var displayModeRaw = DisplayMode.both.rawValue
     @AppStorage("showPronunciation") private var showPronunciation = false
-    @AppStorage("offsetMs") private var offsetMs = 0.0
+    @State private var devices: [DeviceOffset] = []
+    @State private var showCalibration = false
 
     var body: some View {
         NavigationStack {
@@ -40,20 +41,57 @@ struct SettingsView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Timing offset")
+                            Text("Offset")
                             Spacer()
-                            Text(offsetMs == 0 ? "none" : String(format: "%+.2f s", offsetMs / 1000))
+                            Text(model.offsetMs == 0 ? "none" : String(format: "%+.2f s", model.offsetMs / 1000))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                         }
-                        Slider(value: $offsetMs, in: -2000...2000, step: 50)
-                            .tint(.white)
+                        Slider(
+                            value: Binding(get: { model.offsetMs }, set: { model.setOffset($0) }),
+                            in: -3000...3000,
+                            step: 50
+                        )
+                        .tint(.white)
                     }
-                    if offsetMs != 0 {
-                        Button("Reset offset") { offsetMs = 0 }
+                    Button {
+                        showCalibration = true
+                    } label: {
+                        Label("Calibrate (tap or listen)", systemImage: "waveform")
                     }
+                    .disabled(!model.synced)
+                    if model.offsetMs != 0 {
+                        Button("Reset for this device") {
+                            model.setOffset(0)
+                            devices = DeviceOffsets.all()
+                        }
+                    }
+                } header: {
+                    Text("Timing · \(model.deviceName ?? "no active device")")
                 } footer: {
-                    Text("Positive shows lyrics earlier — useful with Bluetooth headphones.")
+                    Text("Saved per Spotify device (phone, speaker, car …) — a new device starts at 0. Positive shows lyrics earlier.")
+                }
+
+                if !devices.isEmpty {
+                    Section("Saved devices") {
+                        ForEach(devices) { d in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(d.name)
+                                    Text(d.type.capitalized).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(String(format: "%+.2f s", d.offsetMs / 1000))
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                        .onDelete { idx in
+                            for i in idx { DeviceOffsets.remove(devices[i].key) }
+                            devices = DeviceOffsets.all()
+                            model.reloadOffset()
+                        }
+                    }
                 }
 
                 Section("Account") {
@@ -78,6 +116,11 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .onAppear { devices = DeviceOffsets.all() }
+            .sheet(isPresented: $showCalibration, onDismiss: { devices = DeviceOffsets.all() }) {
+                CalibrationView(model: model)
+                    .presentationDetents([.medium, .large])
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

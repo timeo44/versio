@@ -52,6 +52,58 @@ enum SpotifyAPI {
     }
 }
 
+// MARK: Spotify player commands
+
+enum PlayerCommandError: LocalizedError {
+    case needsReconnect, premiumRequired, noActiveDevice, restricted, rateLimited, other(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .needsReconnect: return "Reconnect Spotify once to use playback controls."
+        case .premiumRequired: return "Playback controls need Spotify Premium."
+        case .noActiveDevice: return "No active Spotify device — start playback in Spotify first."
+        case .restricted: return "This device doesn't allow remote control right now."
+        case .rateLimited: return "Spotify is rate-limiting — try again in a moment."
+        case .other(let m): return m
+        }
+    }
+}
+
+extension SpotifyAPI {
+    static func play() async throws { try await command("PUT", "/play") }
+    static func pause() async throws { try await command("PUT", "/pause") }
+    static func next() async throws { try await command("POST", "/next") }
+    static func previous() async throws { try await command("POST", "/previous") }
+    static func seek(toMs ms: Int) async throws { try await command("PUT", "/seek?position_ms=\(max(0, ms))") }
+
+    private static func command(_ method: String, _ path: String) async throws {
+        for attempt in 0..<2 {
+            let token = try await SpotifyAuth.shared.accessToken(forceRefresh: attempt > 0)
+            var req = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player" + path)!)
+            req.httpMethod = method
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            req.timeoutInterval = 10
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(status) { return }
+            let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let err = body?["error"] as? [String: Any]
+            let reason = (err?["reason"] as? String) ?? ""
+            let message = (err?["message"] as? String) ?? ""
+            switch status {
+            case 401: if attempt == 0 { continue } else { throw PlayerCommandError.needsReconnect }
+            case 403:
+                if reason == "PREMIUM_REQUIRED" { throw PlayerCommandError.premiumRequired }
+                if message.lowercased().contains("scope") { throw PlayerCommandError.needsReconnect }
+                throw PlayerCommandError.restricted
+            case 404: throw PlayerCommandError.noActiveDevice
+            case 429: throw PlayerCommandError.rateLimited
+            default: throw PlayerCommandError.other(message.isEmpty ? "Spotify player error \(status)" : message)
+            }
+        }
+    }
+}
+
 // MARK: Versio backend (Supabase Edge Function, shared with the web app)
 
 enum VersioAPI {
@@ -66,7 +118,8 @@ enum VersioAPI {
         var req = URLRequest(url: c.url!)
         req.httpMethod = method
         req.timeoutInterval = 45
-        req.setValue("Bearer \(try await SpotifyAuth.shared.accessToken())", forHTTPHeaderField: "Authorization")
+        let token = try await SpotifyAuth.shared.accessToken()
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -107,6 +160,23 @@ enum VersioAPI {
     static func romanize(_ lines: [String], title: String, artist: String, lyrics: String) async throws -> RomanizeResponse {
         try await request("romanize", method: "POST", body: [
             "lines": lines, "context": ["title": title, "artist": artist, "lyrics": lyrics],
+        ])
+    }
+
+    struct HeardWord: Decodable {
+        let word: String
+        let start: Double
+    }
+
+    struct TranscribeResponse: Decodable {
+        let text: String
+        let words: [HeardWord]
+    }
+
+    /// Whisper transcription with word timestamps (for "listen to calibrate").
+    static func transcribe(audio: Data, mime: String, title: String, artist: String) async throws -> TranscribeResponse {
+        try await request("transcribe", method: "POST", body: [
+            "audio": audio.base64EncodedString(), "mime": mime, "title": title, "artist": artist,
         ])
     }
 

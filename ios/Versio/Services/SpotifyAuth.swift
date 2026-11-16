@@ -7,6 +7,8 @@ struct SpotifyTokens: Codable {
     var accessToken: String
     var refreshToken: String
     var expiresAt: Date
+    /// Granted scopes (nil for sessions created before this was stored)
+    var scope: String?
 }
 
 enum AuthError: LocalizedError {
@@ -31,6 +33,8 @@ final class SpotifyAuth {
 
     private(set) var tokens: SpotifyTokens?
     var isLoggedIn: Bool { tokens != nil }
+    /// play/pause/skip/seek need user-modify-playback-state — older sessions must reconnect once
+    var canControl: Bool { tokens?.scope?.contains("user-modify-playback-state") == true }
 
     @ObservationIgnored private var refreshTask: Task<SpotifyTokens, Error>?
     @ObservationIgnored private var session: ASWebAuthenticationSession?
@@ -40,11 +44,13 @@ final class SpotifyAuth {
         tokens = Keychain.load(SpotifyTokens.self, for: "spotify.tokens")
     }
 
+    @MainActor
     private func store(_ t: SpotifyTokens?) {
         tokens = t
         Keychain.save(t, for: "spotify.tokens")
     }
 
+    @MainActor
     func logout() { store(nil) }
 
     // MARK: Login
@@ -98,6 +104,8 @@ final class SpotifyAuth {
     // MARK: Tokens
 
     /// A valid access token, refreshed ~60 s before expiry (single-flight).
+    /// Main-actor isolated so concurrent callers share one refresh.
+    @MainActor
     func accessToken(forceRefresh: Bool = false) async throws -> String {
         guard let t = tokens else { throw AuthError.expired }
         if !forceRefresh, t.expiresAt.timeIntervalSinceNow > 60 { return t.accessToken }
@@ -109,10 +117,10 @@ final class SpotifyAuth {
         defer { refreshTask = nil }
         do {
             let fresh = try await task.value
-            await MainActor.run { self.store(fresh) }
+            store(fresh)
             return fresh.accessToken
         } catch AuthError.expired {
-            await MainActor.run { self.store(nil) }
+            store(nil)
             throw AuthError.expired
         }
     }
@@ -138,7 +146,8 @@ final class SpotifyAuth {
         }
         let refresh = (json["refresh_token"] as? String) ?? previousRefresh ?? ""
         let expires = (json["expires_in"] as? Double) ?? 3600
-        return SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: Date().addingTimeInterval(expires))
+        let scope = (json["scope"] as? String) ?? tokens?.scope
+        return SpotifyTokens(accessToken: access, refreshToken: refresh, expiresAt: Date().addingTimeInterval(expires), scope: scope)
     }
 }
 

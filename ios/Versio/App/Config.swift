@@ -12,7 +12,8 @@ enum Config {
     static let redirectURI = "https://timeo44.github.io/versio/callback"
     static let callbackScheme = "versio"
 
-    static let scopes = "user-read-currently-playing user-read-playback-state"
+    /// modify = play/pause/skip/seek from the app (needs Spotify Premium)
+    static let scopes = "user-read-currently-playing user-read-playback-state user-modify-playback-state"
 
     /// Supabase Edge Function shared with the web app
     static let apiBase = URL(string: "https://jwzrbfpobjuapxntztxs.supabase.co/functions/v1/versio-api")!

@@ -12,13 +12,15 @@ struct ExplainItem: Identifiable {
 struct PlayerView: View {
     let isAdmin: Bool
 
+    @Environment(SpotifyAuth.self) private var auth
     @State private var model = PlayerModel()
     @AppStorage("targetLang") private var targetLang = "de"
     @AppStorage("displayMode") private var displayModeRaw = DisplayMode.both.rawValue
     @AppStorage("showPronunciation") private var showPronunciation = false
-    @AppStorage("offsetMs") private var offsetMs = 0.0
 
     @State private var follow = true
+    @State private var expanded = false
+    @State private var scrubbing: Double?
     @State private var showSettings = false
     @State private var explain: ExplainItem?
     @Environment(\.scenePhase) private var scenePhase
@@ -43,12 +45,15 @@ struct PlayerView: View {
         .onAppear {
             model.target = targetLang
             model.showPronunciation = showPronunciation
-            model.offsetMs = offsetMs
             model.start()
+            updateIdleTimer()
         }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.start() } else if phase == .background { model.stop() }
+            updateIdleTimer()
         }
+        .onChange(of: model.phase) { _, _ in updateIdleTimer() }
         .onChange(of: targetLang) { _, v in
             model.target = v
             model.retranslate()
@@ -57,7 +62,6 @@ struct PlayerView: View {
             model.showPronunciation = v
             model.retranslate()
         }
-        .onChange(of: offsetMs) { _, v in model.offsetMs = v }
         .onChange(of: model.track?.key) { _, _ in follow = true }
         .sheet(isPresented: $showSettings) {
             SettingsView(model: model, isAdmin: isAdmin)
@@ -69,6 +73,11 @@ struct PlayerView: View {
                 .presentationDetents([.medium, .large])
                 .presentationBackground(.ultraThinMaterial)
         }
+    }
+
+    /// Keep the screen on while lyrics are playing.
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && model.phase == .playing
     }
 
     // MARK: Background
@@ -144,46 +153,132 @@ struct PlayerView: View {
     // MARK: Now playing
 
     private func nowPlaying(_ track: SpotifyTrack) -> some View {
-        HStack(spacing: 14) {
-            Group {
-                if let img = model.artwork {
-                    Image(uiImage: img).resizable().scaledToFill()
-                } else {
-                    Color.white.opacity(0.06)
-                }
-            }
-            .frame(width: 58, height: 58)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(track.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
-                    if model.phase == .paused {
-                        Image(systemName: "pause.fill").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                Group {
+                    if let img = model.artwork {
+                        Image(uiImage: img).resizable().scaledToFill()
+                    } else {
+                        Color.white.opacity(0.06)
                     }
                 }
-                Text("\(track.artistLine) · \(track.album.name)")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.55))
-                    .lineLimit(1)
-                TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
-                    let pos = model.position(at: ctx.date, includeOffset: false)
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.white.opacity(0.12))
-                            Capsule().fill(.white)
-                                .frame(width: geo.size.width * min(1, pos / Double(max(1, track.durationMs))))
+                .frame(width: expanded ? 72 : 58, height: expanded ? 72 : 58)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(track.name).font(.system(size: 16, weight: .semibold)).lineLimit(1)
+                        if model.phase == .paused {
+                            Image(systemName: "pause.fill").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5))
                         }
                     }
-                    .frame(height: 3)
+                    Text("\(track.artistLine) · \(track.album.name)")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                    if !expanded {
+                        progressBar(track).padding(.top, 6)
+                    } else if let device = model.deviceName {
+                        Label(device, systemImage: "hifispeaker")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .lineLimit(1)
+                    }
                 }
-                .padding(.top, 6)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .rotationEffect(.degrees(expanded ? 180 : 0))
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { expanded.toggle() }
+            }
+
+            if expanded {
+                miniPlayer(track)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(10)
         .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.06)))
         .padding(.horizontal, 16)
+    }
+
+    private func progressBar(_ track: SpotifyTrack) -> some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let pos = model.position(at: ctx.date, includeOffset: false)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.white.opacity(0.12))
+                    Capsule().fill(.white)
+                        .frame(width: geo.size.width * min(1, pos / Double(max(1, track.durationMs))))
+                }
+            }
+            .frame(height: 3)
+        }
+    }
+
+    private func miniPlayer(_ track: SpotifyTrack) -> some View {
+        VStack(spacing: 14) {
+            TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+                let duration = Double(max(1, track.durationMs))
+                let live = model.position(at: ctx.date, includeOffset: false)
+                VStack(spacing: 4) {
+                    Slider(
+                        value: Binding(get: { scrubbing ?? live }, set: { scrubbing = $0 }),
+                        in: 0...duration,
+                        onEditingChanged: { editing in
+                            if !editing, let v = scrubbing {
+                                Haptics.tap()
+                                model.seek(toMs: v)
+                                scrubbing = nil
+                            }
+                        }
+                    )
+                    .tint(.white)
+                    .disabled(!auth.canControl)
+                    HStack {
+                        Text(Self.time(scrubbing ?? live))
+                        Spacer()
+                        Text(Self.time(duration))
+                    }
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+
+            HStack(spacing: 44) {
+                controlButton("backward.fill", size: 22) { model.previous() }
+                controlButton(model.phase == .playing ? "pause.circle.fill" : "play.circle.fill", size: 54) { model.togglePlay() }
+                controlButton("forward.fill", size: 22) { model.next() }
+            }
+            .disabled(!auth.canControl)
+            .opacity(auth.canControl ? 1 : 0.4)
+        }
+        .padding(.top, 14)
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
+    }
+
+    private func controlButton(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.tap()
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: size))
+                .foregroundStyle(.white)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(PressStyle())
+    }
+
+    static func time(_ ms: Double) -> String {
+        let s = max(0, Int(ms / 1000))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     private var modePicker: some View {
@@ -199,6 +294,15 @@ struct PlayerView: View {
     private var banners: some View {
         VStack(spacing: 6) {
             if model.rateLimited { Banner(text: "Spotify is rate-limiting — sync resumes in a moment.") }
+            if let err = model.controlError { Banner(text: err, tone: .orange) }
+            if !auth.canControl {
+                Button {
+                    Task { try? await auth.login() }
+                } label: {
+                    Banner(text: "Reconnect Spotify once to use play/pause and tap-to-seek →")
+                }
+                .buttonStyle(PressStyle())
+            }
             if case .idle(let msg) = model.phase { Banner(text: msg) }
             if let err = model.translationError { Banner(text: err, tone: .orange) }
             if case .ready(let kind) = model.lyricsState, kind == "plain" {
@@ -257,7 +361,20 @@ struct PlayerView: View {
                         )
                         .id(line.id)
                         .contentShape(Rectangle())
-                        .onTapGesture { openExplanation(index) }
+                        .onTapGesture {
+                            // synced + controls: jump there; otherwise explain
+                            if model.synced && auth.canControl {
+                                Haptics.tap()
+                                follow = true
+                                model.seek(toLine: index)
+                            } else {
+                                openExplanation(index)
+                            }
+                        }
+                        .onLongPressGesture(minimumDuration: 0.35) {
+                            Haptics.press()
+                            openExplanation(index)
+                        }
                     }
                     Color.clear.frame(height: 420)
                 }

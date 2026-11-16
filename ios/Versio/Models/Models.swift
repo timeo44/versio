@@ -11,7 +11,9 @@ struct PlaybackState: Decodable {
 
     struct Device: Decodable {
         let name: String
+        let type: String?
         let isPrivateSession: Bool?
+        let isRestricted: Bool?
     }
 }
 
@@ -56,6 +58,7 @@ struct AppConfig: Decodable {
     let provider: String
     let explanations: Bool
     let pronunciation: Bool?
+    let listen: Bool?
 }
 
 struct LyricLine: Decodable, Identifiable, Equatable {
