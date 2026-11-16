@@ -134,6 +134,10 @@ No key needed. Lookup: exact signature match (track, artist, album, duration) �
 
 Unique lines only (choruses once) → the chunk at the current line first → the rest in parallel. Song or language changes abort in-flight requests.
 
+## iPhone app
+
+A native SwiftUI version lives in [`ios/`](ios/README.md) and uses the same backend.
+
 ## Architecture
 
 ```

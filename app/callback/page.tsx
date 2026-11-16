@@ -14,6 +14,13 @@ export default function Callback() {
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
+    // Logins started by the native iOS app (state "ios.…") reuse this redirect
+    // URI — hand the code back to the app; it holds the PKCE verifier.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("state")?.startsWith("ios.")) {
+      window.location.replace(`versio://callback${window.location.search}`);
+      return;
+    }
     completeLogin(window.location.search)
       .then(() => router.replace("/"))
       .catch((e) => setError(e instanceof Error ? e.message : "Login failed."));
